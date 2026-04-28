@@ -33,6 +33,10 @@ const STYLES = `
     0%   { transform: scale(1.4); opacity: 0; }
     100% { transform: scale(1);   opacity: 1; }
   }
+  @keyframes watch-pulse {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50%      { opacity: 0.9; transform: scale(1.06); }
+  }
 
   .ring-1 {
     width: 280px; height: 160px;
@@ -79,6 +83,7 @@ const STYLES = `
   .slam-in      { animation: slam-in 0.3s ease-out; }
   .slam-in-slow { animation: slam-in 0.4s ease-out; }
   .bolt-pulse   { display: inline-block; animation: pulse-glow 2s ease-in-out infinite; }
+  .watch-dot    { animation: watch-pulse 2.2s ease-in-out infinite; }
 `
 
 // ─── Shared atoms ─────────────────────────────────────────────────────────────
@@ -123,6 +128,13 @@ function Logo() {
       <span style={{ color: '#fff' }}> QUIZPULSE</span>
     </div>
   )
+}
+
+const GAME_LABELS = {
+  blitz: 'BLITZ',
+  closest: 'CLOSEST ANSWER',
+  beer: 'BEER & KNOWLEDGE',
+  'single-team': 'SINGLE TEAM CHALLENGE',
 }
 
 // ─── Team picker ──────────────────────────────────────────────────────────────
@@ -220,9 +232,9 @@ function WaitingScreen() {
   )
 }
 
-// ─── Active — big tap button (+ tapped sub-state) ─────────────────────────────
+// ─── Prize draw active — tap button ──────────────────────────────────────────
 
-function ActiveScreen({ onTap }) {
+function DrawActiveScreen({ onTap }) {
   const [tapped, setTapped] = useState(false)
 
   const handleTap = useCallback(() => {
@@ -322,9 +334,188 @@ function ActiveScreen({ onTap }) {
   )
 }
 
+// ─── Watching screen (non-closest mini games) ─────────────────────────────────
+
+function WatchingScreen({ teamName, mode }) {
+  return (
+    <Screen>
+      <Logo />
+      <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem' }}>
+        <span
+          className="watch-dot"
+          style={{ color: '#f97316', fontSize: '3.5rem', lineHeight: 1 }}
+        >
+          ⚡
+        </span>
+
+        <div>
+          <p style={{ color: '#7a4a20', fontSize: '0.9rem', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
+            {GAME_LABELS[mode] ?? mode}
+          </p>
+          <h1
+            style={{
+              color: '#fff',
+              fontFamily: "'Barlow Condensed', sans-serif",
+              fontWeight: 900,
+              fontSize: 'clamp(2rem, 8vw, 3rem)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              lineHeight: 1,
+            }}
+          >
+            {teamName}
+          </h1>
+        </div>
+
+        <p style={{ color: '#7a4a20', fontSize: '1rem', letterSpacing: '0.12em', textTransform: 'uppercase', maxWidth: 240, lineHeight: 1.5 }}>
+          Watch the big screen
+        </p>
+      </div>
+    </Screen>
+  )
+}
+
+// ─── Closest Answer input screen ──────────────────────────────────────────────
+
+function ClosestAnswerScreen({ miniGame, teamId, existingSubmission, onSubmit }) {
+  const [value, setValue] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleSubmit = useCallback(async () => {
+    const num = parseFloat(value)
+    if (isNaN(num) || submitting) return
+    setSubmitting(true)
+    await onSubmit(teamId, num)
+  }, [value, teamId, submitting, onSubmit])
+
+  if (existingSubmission != null) {
+    return (
+      <Screen>
+        <Logo />
+        <span className="slam-in" style={{ color: '#f97316', fontSize: '4rem', lineHeight: 1 }}>✓</span>
+        <h2
+          style={{
+            color: '#fff',
+            fontFamily: "'Barlow Condensed', sans-serif",
+            fontWeight: 900,
+            fontSize: '2rem',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            textAlign: 'center',
+            marginTop: '1rem',
+          }}
+        >
+          Answer locked in
+        </h2>
+        <p style={{ color: '#7a4a20', fontSize: '1.1rem', marginTop: '0.5rem', letterSpacing: '0.05em' }}>
+          Your answer: <strong style={{ color: '#f97316' }}>{existingSubmission}</strong>
+        </p>
+        <p style={{ color: '#555', fontSize: '0.9rem', marginTop: '0.5rem', letterSpacing: '0.1em' }}>
+          Watch the big screen
+        </p>
+      </Screen>
+    )
+  }
+
+  return (
+    <Screen>
+      <Logo />
+      <div style={{ width: '100%', maxWidth: 340, display: 'flex', flexDirection: 'column', gap: '1.5rem', alignItems: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <p style={{ color: '#f97316', fontWeight: 700, fontSize: '0.85rem', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: '0.75rem' }}>
+            CLOSEST ANSWER
+          </p>
+          <h2 style={{
+            color: '#fff',
+            fontFamily: "'Barlow Condensed', sans-serif",
+            fontWeight: 900,
+            fontSize: 'clamp(1.4rem, 5vw, 2rem)',
+            lineHeight: 1.2,
+            letterSpacing: '0.02em',
+          }}>
+            {miniGame.questionText}
+          </h2>
+        </div>
+
+        <input
+          type="number"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          placeholder="Your number…"
+          style={{
+            width: '100%', boxSizing: 'border-box',
+            background: 'rgba(255,255,255,0.06)',
+            border: '2px solid rgba(249,115,22,0.4)',
+            borderRadius: '1rem',
+            color: '#fff',
+            fontFamily: "'Barlow Condensed', sans-serif",
+            fontWeight: 700,
+            fontSize: '2.5rem',
+            textAlign: 'center',
+            padding: '1rem',
+            outline: 'none',
+            WebkitAppearance: 'none',
+            MozAppearance: 'textfield',
+          }}
+          onFocus={e => e.target.style.borderColor = '#f97316'}
+          onBlur={e => e.target.style.borderColor = 'rgba(249,115,22,0.4)'}
+        />
+
+        <button
+          onClick={handleSubmit}
+          disabled={!value.trim() || isNaN(parseFloat(value)) || submitting}
+          style={{
+            width: '100%',
+            fontFamily: "'Barlow Condensed', sans-serif",
+            fontWeight: 900,
+            fontSize: '1.6rem',
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase',
+            color: '#fff',
+            background: '#f97316',
+            border: 'none',
+            borderRadius: '1rem',
+            padding: '1.1rem',
+            cursor: (!value.trim() || isNaN(parseFloat(value)) || submitting) ? 'not-allowed' : 'pointer',
+            opacity: (!value.trim() || isNaN(parseFloat(value)) || submitting) ? 0.4 : 1,
+            WebkitTapHighlightColor: 'transparent',
+            boxShadow: '0 0 20px rgba(249,115,22,0.3)',
+            transition: 'opacity 0.15s',
+          }}
+        >
+          {submitting ? 'Locking in…' : 'Submit'}
+        </button>
+      </div>
+    </Screen>
+  )
+}
+
 // ─── Revealing ────────────────────────────────────────────────────────────────
 
-function RevealingScreen() {
+function RevealingScreen({ mode }) {
+  if (mode && mode !== 'draw') {
+    return (
+      <Screen>
+        <Logo />
+        <span className="watch-dot" style={{ color: '#f97316', fontSize: '3.5rem', lineHeight: 1 }}>⚡</span>
+        <h2 style={{
+          color: '#fff',
+          fontFamily: "'Barlow Condensed', sans-serif",
+          fontWeight: 900,
+          fontSize: '2rem',
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
+          textAlign: 'center',
+          marginTop: '1rem',
+        }}>
+          Watch the big screen
+        </h2>
+      </Screen>
+    )
+  }
+
   return (
     <Screen>
       <Logo />
@@ -352,13 +543,35 @@ function RevealingScreen() {
 
 // ─── Revealed ─────────────────────────────────────────────────────────────────
 
-function RevealedScreen({ winnerName }) {
+function RevealedScreen({ winnerName, mode }) {
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 60)
     return () => clearTimeout(t)
   }, [])
+
+  if (mode && mode !== 'draw') {
+    return (
+      <Screen>
+        <Logo />
+        <div style={{ textAlign: 'center', opacity: visible ? 1 : 0, transition: 'opacity 0.5s' }}>
+          <span className="bolt-pulse" style={{ color: '#f97316', fontSize: '3rem', lineHeight: 1 }}>⚡</span>
+          <h2 style={{
+            color: '#fff',
+            fontFamily: "'Barlow Condensed', sans-serif",
+            fontWeight: 900,
+            fontSize: '2rem',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            marginTop: '1rem',
+          }}>
+            Round complete!
+          </h2>
+        </div>
+      </Screen>
+    )
+  }
 
   return (
     <Screen>
@@ -414,14 +627,13 @@ function RevealedScreen({ winnerName }) {
 
 export default function Play() {
   const { id: sessionId } = useParams()
-  const { teams, state, winnerId, winnerName, loading } = usePulseSession(sessionId)
+  const { teams, state, mode, miniGame, winnerId, winnerName, loading, submitAnswer } = usePulseSession(sessionId)
 
   const [selectedTeamId, setSelectedTeamId] = useState(() =>
     sessionId ? localStorage.getItem(TEAM_KEY(sessionId)) : null
   )
   const [tapCount, setTapCount] = useState(0)
 
-  // Reset tap count at the start of each active round
   const prevStateRef = useRef(null)
   useEffect(() => {
     if (state === 'active' && prevStateRef.current !== 'active') setTapCount(0)
@@ -435,8 +647,9 @@ export default function Play() {
 
   const handleTap = useCallback(() => setTapCount(c => c + 1), [])
 
-  // Validate stored team still exists (admin may have removed it)
   const selectedTeam = teams.find(t => t.id === selectedTeamId) ?? null
+  const isMiniGame = mode && mode !== 'draw'
+  const existingSubmission = miniGame?.submissions?.[selectedTeamId] ?? null
 
   let content
 
@@ -472,11 +685,24 @@ export default function Play() {
   } else if (state === 'setup') {
     content = <WaitingScreen />
   } else if (state === 'active') {
-    content = <ActiveScreen onTap={handleTap} />
+    if (mode === 'closest') {
+      content = (
+        <ClosestAnswerScreen
+          miniGame={miniGame}
+          teamId={selectedTeamId}
+          existingSubmission={existingSubmission}
+          onSubmit={submitAnswer}
+        />
+      )
+    } else if (isMiniGame) {
+      content = <WatchingScreen teamName={selectedTeam.name} mode={mode} />
+    } else {
+      content = <DrawActiveScreen onTap={handleTap} />
+    }
   } else if (state === 'revealing') {
-    content = <RevealingScreen />
+    content = <RevealingScreen mode={mode} />
   } else if (state === 'revealed') {
-    content = <RevealedScreen winnerName={winnerName ?? ''} />
+    content = <RevealedScreen winnerName={winnerName ?? ''} mode={mode} />
   } else {
     content = <WaitingScreen />
   }

@@ -4,10 +4,6 @@
  * Central hook for all Firebase Realtime Database interactions.
  * All three screens (Admin, Play, Display) use this hook.
  * No component should write to Firebase directly.
- *
- * Usage:
- *   const { session, teams, activatePulse, revealWinner, resetSession } =
- *     usePulseSession(sessionId)
  */
 
 import { useEffect, useState, useCallback } from 'react'
@@ -15,25 +11,20 @@ import { ref, onValue, set, update, push, remove } from 'firebase/database'
 import { db } from '@/lib/firebase'
 import { pickWinner } from '@/lib/weighted-draw'
 
-// ─── Session helpers ──────────────────────────────────────────────────────────
+const DEFAULT_COUNTDOWN = { blitz: 30, closest: 60, beer: 45, 'single-team': 45 }
 
-function sessionRef(sessionId) {
-  return ref(db, `pulseSession/${sessionId}`)
-}
+// ─── Refs ─────────────────────────────────────────────────────────────────────
 
-function teamsRef(sessionId) {
-  return ref(db, `pulseSession/${sessionId}/teams`)
-}
-
-function teamRef(sessionId, teamId) {
-  return ref(db, `pulseSession/${sessionId}/teams/${teamId}`)
-}
+function sessionRef(id) { return ref(db, `pulseSession/${id}`) }
+function teamsRef(id) { return ref(db, `pulseSession/${id}/teams`) }
+function teamRef(id, teamId) { return ref(db, `pulseSession/${id}/teams/${teamId}`) }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function usePulseSession(sessionId) {
   const [session, setSession] = useState(null)
   const [teams, setTeams] = useState([])
+  const [questions, setQuestions] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -49,16 +40,11 @@ export function usePulseSession(sessionId) {
           setSession(null)
           setTeams([])
         } else {
-          // Separate teams from session metadata
           const { teams: teamsMap, ...sessionData } = data
           setSession(sessionData)
-
-          // Convert teams object to sorted array
-          const teamsArray = teamsMap
+          setTeams(teamsMap
             ? Object.entries(teamsMap).map(([id, team]) => ({ id, ...team }))
-            : []
-
-          setTeams(teamsArray)
+            : [])
         }
         setLoading(false)
       },
@@ -72,12 +58,23 @@ export function usePulseSession(sessionId) {
     return () => unsub()
   }, [sessionId])
 
-  // ─── Admin: Create a new session ────────────────────────────────────────────
+  // Subscribe to global question bank
+  useEffect(() => {
+    const unsub = onValue(ref(db, 'pulseQuestions'), snapshot => {
+      const data = snapshot.val() || {}
+      setQuestions(Object.entries(data).map(([id, q]) => ({ id, ...q })))
+    })
+    return () => unsub()
+  }, [])
+
+  // ─── Admin: Create session ───────────────────────────────────────────────────
 
   const createSession = useCallback(async () => {
     const newRef = push(ref(db, 'pulseSession'))
     await set(newRef, {
       state: 'setup',
+      mode: null,
+      miniGame: null,
       winnerId: null,
       winnerName: null,
       createdAt: Date.now(),
@@ -90,10 +87,7 @@ export function usePulseSession(sessionId) {
   const addTeam = useCallback(async (name) => {
     if (!sessionId) return
     const newTeamRef = push(teamsRef(sessionId))
-    await set(newTeamRef, {
-      name: name.trim(),
-      pulseScore: 0,
-    })
+    await set(newTeamRef, { name: name.trim(), pulseScore: 0 })
     return newTeamRef.key
   }, [sessionId])
 
@@ -114,44 +108,90 @@ export function usePulseSession(sessionId) {
 
   // ─── Admin: Session control ──────────────────────────────────────────────────
 
+  // Prize draw (existing behaviour)
   const activatePulse = useCallback(async () => {
     if (!sessionId) return
     await update(sessionRef(sessionId), {
       state: 'active',
+      mode: 'draw',
+      miniGame: null,
       activatedAt: Date.now(),
       winnerId: null,
       winnerName: null,
     })
   }, [sessionId])
 
+  // Mini game trigger
+  const activatePulseWithGame = useCallback(async (mode, miniGameData) => {
+    if (!sessionId) return
+    await update(sessionRef(sessionId), {
+      state: 'active',
+      mode,
+      miniGame: {
+        ...miniGameData,
+        countdownSeconds: DEFAULT_COUNTDOWN[mode] ?? 60,
+      },
+      activatedAt: Date.now(),
+      winnerId: null,
+      winnerName: null,
+    })
+  }, [sessionId])
+
+  // Draw reveal — picks winner, animates, auto-transitions to revealed
   const revealWinner = useCallback(async () => {
     if (!sessionId || teams.length === 0) return
-
-    // Pick winner now — animation on display is purely theatrical
     const winner = pickWinner(teams)
-
-    // Move to revealing state first so display can animate
     await update(sessionRef(sessionId), {
       state: 'revealing',
       winnerId: winner.id,
       winnerName: winner.name,
     })
-
-    // After animation duration, move to revealed
     setTimeout(async () => {
       await update(sessionRef(sessionId), { state: 'revealed' })
-    }, 5000) // 5 seconds for the cycling animation
+    }, 5000)
   }, [sessionId, teams])
+
+  // Mini game reveal — admin manually advances
+  const revealMiniGame = useCallback(async () => {
+    if (!sessionId) return
+    await update(sessionRef(sessionId), { state: 'revealing' })
+  }, [sessionId])
+
+  const confirmReveal = useCallback(async () => {
+    if (!sessionId) return
+    await update(sessionRef(sessionId), { state: 'revealed' })
+  }, [sessionId])
 
   const resetSession = useCallback(async () => {
     if (!sessionId) return
     await update(sessionRef(sessionId), {
       state: 'setup',
+      mode: null,
+      miniGame: null,
       winnerId: null,
       winnerName: null,
       activatedAt: null,
     })
   }, [sessionId])
+
+  // ─── Player: submit closest-answer guess ─────────────────────────────────────
+
+  const submitAnswer = useCallback(async (teamId, value) => {
+    if (!sessionId) return
+    await set(ref(db, `pulseSession/${sessionId}/miniGame/submissions/${teamId}`), value)
+  }, [sessionId])
+
+  // ─── Admin: Question bank ────────────────────────────────────────────────────
+
+  const addQuestion = useCallback(async (question) => {
+    const newRef = push(ref(db, 'pulseQuestions'))
+    await set(newRef, { ...question, createdAt: Date.now() })
+    return newRef.key
+  }, [])
+
+  const removeQuestion = useCallback(async (questionId) => {
+    await remove(ref(db, `pulseQuestions/${questionId}`))
+  }, [])
 
   // ─── Return ──────────────────────────────────────────────────────────────────
 
@@ -159,11 +199,15 @@ export function usePulseSession(sessionId) {
     // State
     session,
     teams,
+    questions,
     loading,
     error,
 
     // Derived
     state: session?.state ?? 'setup',
+    mode: session?.mode ?? null,
+    miniGame: session?.miniGame ?? null,
+    activatedAt: session?.activatedAt ?? null,
     winnerName: session?.winnerName ?? null,
     winnerId: session?.winnerId ?? null,
 
@@ -174,7 +218,17 @@ export function usePulseSession(sessionId) {
     updateTeamName,
     removeTeam,
     activatePulse,
+    activatePulseWithGame,
     revealWinner,
+    revealMiniGame,
+    confirmReveal,
     resetSession,
+
+    // Player actions
+    submitAnswer,
+
+    // Question bank
+    addQuestion,
+    removeQuestion,
   }
 }
