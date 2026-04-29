@@ -111,30 +111,36 @@ export function usePulseSession(sessionId) {
   // Prize draw (existing behaviour)
   const activatePulse = useCallback(async () => {
     if (!sessionId) return
-    await update(sessionRef(sessionId), {
-      state: 'active',
-      mode: 'draw',
-      miniGame: null,
-      activatedAt: Date.now(),
-      winnerId: null,
-      winnerName: null,
-    })
+    await Promise.all([
+      update(sessionRef(sessionId), {
+        state: 'active',
+        mode: 'draw',
+        miniGame: null,
+        activatedAt: Date.now(),
+        winnerId: null,
+        winnerName: null,
+      }),
+      set(ref(db, 'activePulseSession'), { sessionId }),
+    ])
   }, [sessionId])
 
   // Mini game trigger
   const activatePulseWithGame = useCallback(async (mode, miniGameData) => {
     if (!sessionId) return
-    await update(sessionRef(sessionId), {
-      state: 'active',
-      mode,
-      miniGame: {
-        ...miniGameData,
-        countdownSeconds: DEFAULT_COUNTDOWN[mode] ?? 60,
-      },
-      activatedAt: Date.now(),
-      winnerId: null,
-      winnerName: null,
-    })
+    await Promise.all([
+      update(sessionRef(sessionId), {
+        state: 'active',
+        mode,
+        miniGame: {
+          ...miniGameData,
+          countdownSeconds: DEFAULT_COUNTDOWN[mode] ?? 60,
+        },
+        activatedAt: Date.now(),
+        winnerId: null,
+        winnerName: null,
+      }),
+      set(ref(db, 'activePulseSession'), { sessionId }),
+    ])
   }, [sessionId])
 
   // Draw reveal — picks winner, animates, auto-transitions to revealed
@@ -164,14 +170,17 @@ export function usePulseSession(sessionId) {
 
   const resetSession = useCallback(async () => {
     if (!sessionId) return
-    await update(sessionRef(sessionId), {
-      state: 'setup',
-      mode: null,
-      miniGame: null,
-      winnerId: null,
-      winnerName: null,
-      activatedAt: null,
-    })
+    await Promise.all([
+      update(sessionRef(sessionId), {
+        state: 'setup',
+        mode: null,
+        miniGame: null,
+        winnerId: null,
+        winnerName: null,
+        activatedAt: null,
+      }),
+      set(ref(db, 'activePulseSession'), { sessionId: null }),
+    ])
   }, [sessionId])
 
   // ─── Player: submit closest-answer guess ─────────────────────────────────────
