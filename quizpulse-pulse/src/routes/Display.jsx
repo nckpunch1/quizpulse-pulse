@@ -292,7 +292,7 @@ function RevealedScreen({ displayText }) {
 // ─── Game active screens ──────────────────────────────────────────────────────
 
 function BlitzGameScreen({ miniGame, session }) {
-  const idx = session?.currentQuestionIndex ?? 0
+  const idx = miniGame?.currentQuestionIndex ?? session?.currentGame?.currentQuestionIndex ?? 0
   const currentQ = Array.isArray(miniGame?.questions)
     ? (miniGame.questions[idx] ?? {})
     : { text: miniGame?.questionText, choiceA: miniGame?.choiceA, choiceB: miniGame?.choiceB }
@@ -409,8 +409,9 @@ function BonusGameScreen({ miniGame, winnerName, outcomeType }) {
 
 export default function Display() {
   const { id: sessionId } = useParams()
-  const { teams, state, winnerName, loading, miniGame, session } = usePulseSession(sessionId)
+  const { teams, state, winnerName, loading, session } = usePulseSession(sessionId)
   const outcomeType = session?.outcomeType ?? session?.gameType ?? null
+  const miniGame = session?.currentGame ?? session?.miniGame ?? null
 
   const landingTarget =
     outcomeType === 'blitz' ? 'SUDDEN DEATH BLITZ' :

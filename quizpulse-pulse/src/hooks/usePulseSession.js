@@ -70,7 +70,7 @@ export function usePulseSession(sessionId) {
   // ─── Admin: Create session ───────────────────────────────────────────────────
 
   const createSession = useCallback(async () => {
-    const newRef = push(ref(db, 'pulseSession'))
+    const newRef = push(ref(db, 'pulseSessions'))
     await set(newRef, {
       state: 'setup',
       mode: null,
@@ -187,7 +187,7 @@ export function usePulseSession(sessionId) {
 
   const submitAnswer = useCallback(async (teamId, value) => {
     if (!sessionId) return
-    await set(ref(db, `pulseSession/${sessionId}/miniGame/submissions/${teamId}`), value)
+    await set(ref(db, `pulseSessions/${sessionId}/miniGame/submissions/${teamId}`), value)
   }, [sessionId])
 
   // ─── Admin: Question bank ────────────────────────────────────────────────────
@@ -215,7 +215,8 @@ export function usePulseSession(sessionId) {
     // Derived
     state: session?.state ?? 'setup',
     mode: session?.mode ?? null,
-    miniGame: session?.miniGame ?? null,
+    gameType: session?.gameType ?? null,
+    miniGame: session?.currentGame ?? session?.miniGame ?? null,
     activatedAt: session?.activatedAt ?? null,
     winnerName: session?.winnerName ?? null,
     winnerId: session?.winnerId ?? null,
