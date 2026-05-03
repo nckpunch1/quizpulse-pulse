@@ -88,6 +88,28 @@ const GAME_LABELS = {
   'single-team': 'SINGLE TEAM CHALLENGE',
 }
 
+const OUTCOME_LABELS = {
+  bonus_question: '🎯 Bonus Question',
+  beer_game: '🍺 Beer Game',
+  blitz: '⚡ Sudden Death Blitz',
+  closest_answer: '🎯 Closest Answer',
+}
+
+function OutcomeLabel({ outcomeType }) {
+  const label = OUTCOME_LABELS[outcomeType]
+  if (!label) return null
+  return (
+    <p style={{
+      position: 'absolute', bottom: '3vh', left: '50%', transform: 'translateX(-50%)',
+      color: '#333', fontSize: 'clamp(0.65rem, 1.1vw, 0.95rem)',
+      fontWeight: 600, letterSpacing: '0.18em', textTransform: 'uppercase',
+      whiteSpace: 'nowrap', pointerEvents: 'none',
+    }}>
+      {label}
+    </p>
+  )
+}
+
 function FullScreen({ children, style }) {
   return (
     <div style={{
@@ -135,9 +157,7 @@ function CountdownRing({ seconds, total }) {
 
 // ─── Prize draw screens (existing) ────────────────────────────────────────────
 
-function SetupScreen({ sessionId }) {
-  const playUrl = `${window.location.origin}/play/${sessionId}`
-
+function SetupScreen({ sessionId, outcomeType }) {
   return (
     <div style={{
       ...font,
@@ -181,25 +201,18 @@ function SetupScreen({ sessionId }) {
         <p style={{
           color: '#444', fontWeight: 600,
           fontSize: 'clamp(0.75rem, 1.4vw, 1.1rem)',
-          textTransform: 'uppercase', letterSpacing: '0.2em', marginBottom: '1.5vh',
+          textTransform: 'uppercase', letterSpacing: '0.2em',
         }}>
-          Players — open on your phone
-        </p>
-        <p style={{
-          color: '#f97316', fontFamily: 'monospace',
-          fontSize: 'clamp(1rem, 2vw, 2rem)',
-          background: '#141414', borderRadius: 16,
-          padding: '1rem 2.5rem', border: '1px solid #222',
-          letterSpacing: '0.03em',
-        }}>
-          {playUrl}
+          Players — open your PulseIQ app
         </p>
       </div>
+
+      <OutcomeLabel outcomeType={outcomeType} />
     </div>
   )
 }
 
-function DrawActiveScreen() {
+function DrawActiveScreen({ outcomeType }) {
   return (
     <div style={{
       ...font,
@@ -237,6 +250,8 @@ function DrawActiveScreen() {
           CAPTAINS — OPEN YOUR PHONES AND TAP
         </p>
       </div>
+
+      <OutcomeLabel outcomeType={outcomeType} />
     </div>
   )
 }
@@ -741,7 +756,8 @@ function SingleTeamDisplay({ miniGame, teams, state, activatedAt }) {
 
 export default function Display() {
   const { id: sessionId } = useParams()
-  const { teams, state, winnerName, loading, mode, miniGame, activatedAt } = usePulseSession(sessionId)
+  const { teams, state, winnerName, loading, mode, miniGame, activatedAt, session } = usePulseSession(sessionId)
+  const outcomeType = session?.outcomeType ?? null
   const revealFrame = useRevealAnimation(state, winnerName, teams)
 
   if (!sessionId) {
@@ -763,14 +779,14 @@ export default function Display() {
     )
   }
 
-  if (state === 'setup') return <SetupScreen sessionId={sessionId} />
+  if (state === 'setup') return <SetupScreen sessionId={sessionId} outcomeType={outcomeType} />
 
   // Prize draw — existing screens
   if (!mode || mode === 'draw') {
-    if (state === 'active') return <DrawActiveScreen />
+    if (state === 'active') return <DrawActiveScreen outcomeType={outcomeType} />
     if (state === 'revealing') return <RevealingScreen frame={revealFrame} />
     if (state === 'revealed') return <DrawRevealedScreen winnerName={winnerName} />
-    return <SetupScreen sessionId={sessionId} />
+    return <SetupScreen sessionId={sessionId} outcomeType={outcomeType} />
   }
 
   // Mini game screens

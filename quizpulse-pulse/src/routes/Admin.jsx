@@ -11,6 +11,13 @@ const GAME_TYPES = {
   'single-team': 'Single Team',
 }
 
+const OUTCOME_LABELS = {
+  bonus_question: '🎯 Bonus Question',
+  beer_game: '🍺 Beer Game',
+  blitz: '⚡ Sudden Death Blitz',
+  closest_answer: '🎯 Closest Answer',
+}
+
 const TYPE_NEEDS_CHOICES = t => t === 'blitz' || t === 'beer'
 const TYPE_NEEDS_TEAM = t => t === 'single-team' || t === 'beer'
 const TYPE_NEEDS_OPPONENT = t => t === 'beer'
@@ -216,6 +223,21 @@ function TypeBadge({ type }) {
       flexShrink: 0,
     }}>
       {GAME_TYPES[type] ?? type}
+    </span>
+  )
+}
+
+function OutcomeBadge({ outcomeType }) {
+  const label = OUTCOME_LABELS[outcomeType]
+  if (!label) return null
+  return (
+    <span style={{
+      ...font, background: '#1a1a1a', color: '#888',
+      padding: '4px 10px', borderRadius: 999,
+      fontSize: 11, fontWeight: 600,
+      letterSpacing: '0.08em', flexShrink: 0,
+    }}>
+      {label}
     </span>
   )
 }
@@ -578,6 +600,7 @@ export default function Admin() {
   const [trigger, setTrigger] = useState(null)
 
   const {
+    session,
     teams,
     questions,
     state,
@@ -791,6 +814,7 @@ export default function Admin() {
           <h1 style={{ color: '#f97316', fontWeight: 900, fontSize: 20, letterSpacing: '0.25em', textTransform: 'uppercase' }}>Pulse Button</h1>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {isMiniGame && <TypeBadge type={mode} />}
+            <OutcomeBadge outcomeType={session?.outcomeType} />
             <StateBadge state={state} />
           </div>
         </div>
@@ -852,7 +876,10 @@ export default function Admin() {
         <h1 style={{ color: '#f97316', fontWeight: 900, fontSize: 20, letterSpacing: '0.25em', textTransform: 'uppercase' }}>
           Pulse Button
         </h1>
-        <StateBadge state={state} />
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <OutcomeBadge outcomeType={session?.outcomeType} />
+          <StateBadge state={state} />
+        </div>
       </div>
 
       <div style={{ maxWidth: 520, margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: 16 }}>
