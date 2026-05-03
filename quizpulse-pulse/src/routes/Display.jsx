@@ -318,7 +318,7 @@ function BlitzGameScreen({ miniGame, session }) {
           fontSize: 'clamp(2rem, 5vw, 6rem)',
           lineHeight: 1.05, letterSpacing: '0.01em',
         }}>
-          {currentQ.text}
+          {currentQ.text ?? currentQ.question}
         </h1>
 
         <div style={{ display: 'flex', gap: '3vw' }}>
