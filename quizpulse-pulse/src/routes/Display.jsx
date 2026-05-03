@@ -361,7 +361,7 @@ function ClosestGameScreen({ miniGame }) {
         fontSize: 'clamp(2rem, 5vw, 7rem)',
         lineHeight: 1.05, maxWidth: '85vw',
       }}>
-        {miniGame?.questionText}
+        {miniGame?.question ?? miniGame?.questionText}
       </h1>
       <p style={{
         color: '#555', fontWeight: 700,
@@ -399,7 +399,7 @@ function BonusGameScreen({ miniGame, winnerName, outcomeType }) {
         fontSize: 'clamp(1.5rem, 4vw, 6rem)',
         lineHeight: 1.05, maxWidth: '85vw',
       }}>
-        {miniGame?.questionText}
+        {miniGame?.question ?? miniGame?.questionText}
       </h2>
     </FullScreen>
   )

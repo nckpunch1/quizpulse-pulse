@@ -160,8 +160,18 @@ export function usePulseSession(sessionId) {
   // Mini game reveal — admin manually advances
   const revealMiniGame = useCallback(async () => {
     if (!sessionId) return
-    await update(sessionRef(sessionId), { state: 'revealing' })
-  }, [sessionId])
+    const mode = session?.mode
+    if (mode && mode !== 'blitz' && mode !== 'closest' && teams.length > 0) {
+      const winner = teams.reduce((a, b) => ((b.pulseScore ?? 0) > (a.pulseScore ?? 0) ? b : a))
+      await update(sessionRef(sessionId), {
+        state: 'revealing',
+        winnerId: winner.id,
+        winnerName: winner.name,
+      })
+    } else {
+      await update(sessionRef(sessionId), { state: 'revealing' })
+    }
+  }, [sessionId, session, teams])
 
   const confirmReveal = useCallback(async () => {
     if (!sessionId) return
