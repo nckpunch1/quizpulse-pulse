@@ -410,7 +410,7 @@ function BonusGameScreen({ miniGame, winnerName, outcomeType }) {
 export default function Display() {
   const { id: sessionId } = useParams()
   const { teams, state, winnerName, loading, miniGame, session } = usePulseSession(sessionId)
-  const outcomeType = session?.outcomeType ?? null
+  const outcomeType = session?.outcomeType ?? session?.gameType ?? null
 
   const landingTarget =
     outcomeType === 'blitz' ? 'SUDDEN DEATH BLITZ' :
