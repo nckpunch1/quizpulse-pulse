@@ -15,9 +15,9 @@ const DEFAULT_COUNTDOWN = { blitz: 30, closest: 60, beer: 45, 'single-team': 45 
 
 // ─── Refs ─────────────────────────────────────────────────────────────────────
 
-function sessionRef(id) { return ref(db, `pulseSession/${id}`) }
-function teamsRef(id) { return ref(db, `pulseSession/${id}/teams`) }
-function teamRef(id, teamId) { return ref(db, `pulseSession/${id}/teams/${teamId}`) }
+function sessionRef(id) { return ref(db, `pulseSessions/${id}`) }
+function teamsRef(id) { return ref(db, `pulseSessions/${id}/teams`) }
+function teamRef(id, teamId) { return ref(db, `pulseSessions/${id}/teams/${teamId}`) }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
