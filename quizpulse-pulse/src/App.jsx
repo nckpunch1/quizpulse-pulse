@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Admin from './routes/Admin'
 import Play from './routes/Play'
 import Display from './routes/Display'
+import LeaderboardDisplay from './pages/LeaderboardDisplay'
 
 export default function App() {
   return (
@@ -11,6 +12,7 @@ export default function App() {
         <Route path="/admin" element={<Admin />} />
         <Route path="/play/:id" element={<Play />} />
         <Route path="/display/:id" element={<Display />} />
+        <Route path="/leaderboard/:id" element={<LeaderboardDisplay />} />
       </Routes>
     </BrowserRouter>
   )

@@ -377,7 +377,7 @@ function WatchingScreen({ teamName, mode }) {
 
 // ─── Closest Answer input screen ──────────────────────────────────────────────
 
-function ClosestAnswerScreen({ miniGame, teamId, existingSubmission, onSubmit }) {
+function ClosestAnswerScreen({ miniGame, teamId, teamName, existingSubmission, onSubmit }) {
   const [value, setValue] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -385,8 +385,8 @@ function ClosestAnswerScreen({ miniGame, teamId, existingSubmission, onSubmit })
     const num = parseFloat(value)
     if (isNaN(num) || submitting) return
     setSubmitting(true)
-    await onSubmit(teamId, num)
-  }, [value, teamId, submitting, onSubmit])
+    await onSubmit(teamId, num, teamName)
+  }, [value, teamId, teamName, submitting, onSubmit])
 
   if (existingSubmission != null) {
     return (
@@ -627,7 +627,7 @@ function RevealedScreen({ winnerName, mode }) {
 
 export default function Play() {
   const { id: sessionId } = useParams()
-  const { teams, state, mode, miniGame, winnerId, winnerName, loading, submitAnswer } = usePulseSession(sessionId)
+  const { teams, state, mode, gameType, miniGame, winnerId, winnerName, loading, submitAnswer } = usePulseSession(sessionId)
 
   const [selectedTeamId, setSelectedTeamId] = useState(() =>
     sessionId ? localStorage.getItem(TEAM_KEY(sessionId)) : null
@@ -649,7 +649,10 @@ export default function Play() {
 
   const selectedTeam = teams.find(t => t.id === selectedTeamId) ?? null
   const isMiniGame = mode && mode !== 'draw'
-  const existingSubmission = miniGame?.submissions?.[selectedTeamId] ?? null
+  const existingSubmission =
+    miniGame?.submissions?.[selectedTeamId] ??
+    miniGame?.answers?.[selectedTeamId]?.answer ??
+    null
 
   let content
 
@@ -690,6 +693,7 @@ export default function Play() {
         <ClosestAnswerScreen
           miniGame={miniGame}
           teamId={selectedTeamId}
+          teamName={selectedTeam.name}
           existingSubmission={existingSubmission}
           onSubmit={submitAnswer}
         />
@@ -698,6 +702,20 @@ export default function Play() {
       content = <WatchingScreen teamName={selectedTeam.name} mode={mode} />
     } else {
       content = <DrawActiveScreen onTap={handleTap} />
+    }
+  } else if (state === 'game_active') {
+    if (gameType === 'closest_answer') {
+      content = (
+        <ClosestAnswerScreen
+          miniGame={miniGame}
+          teamId={selectedTeamId}
+          teamName={selectedTeam.name}
+          existingSubmission={existingSubmission}
+          onSubmit={submitAnswer}
+        />
+      )
+    } else {
+      content = <WatchingScreen teamName={selectedTeam.name} mode={gameType} />
     }
   } else if (state === 'revealing') {
     content = <RevealingScreen mode={mode} />

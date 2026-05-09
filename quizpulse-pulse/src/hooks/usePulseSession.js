@@ -195,9 +195,13 @@ export function usePulseSession(sessionId) {
 
   // ─── Player: submit closest-answer guess ─────────────────────────────────────
 
-  const submitAnswer = useCallback(async (teamId, value) => {
+  const submitAnswer = useCallback(async (teamId, value, teamName) => {
     if (!sessionId) return
-    await set(ref(db, `pulseSessions/${sessionId}/miniGame/submissions/${teamId}`), value)
+    await set(ref(db, `pulseSessions/${sessionId}/currentGame/answers/${teamId}`), {
+      teamId,
+      teamName: teamName ?? '',
+      answer: value,
+    })
   }, [sessionId])
 
   // ─── Admin: Question bank ────────────────────────────────────────────────────
@@ -251,4 +255,21 @@ export function usePulseSession(sessionId) {
     addQuestion,
     removeQuestion,
   }
+}
+
+export function useLeaderboardDisplay(sessionId) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!sessionId) return
+    const unsub = onValue(
+      ref(db, `leaderboardDisplay/${sessionId}`),
+      (snap) => { setData(snap.val()); setLoading(false) },
+      () => setLoading(false)
+    )
+    return () => unsub()
+  }, [sessionId])
+
+  return { data, loading }
 }

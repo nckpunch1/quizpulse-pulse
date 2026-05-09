@@ -297,6 +297,9 @@ function BlitzGameScreen({ miniGame, session }) {
     ? (miniGame.questions[idx] ?? {})
     : { text: miniGame?.questionText, choiceA: miniGame?.choiceA, choiceB: miniGame?.choiceB }
 
+  const choiceA = currentQ.choiceA ?? currentQ.choices?.[0]
+  const choiceB = currentQ.choiceB ?? currentQ.choices?.[1]
+
   return (
     <FullScreen>
       <p style={{
@@ -329,7 +332,7 @@ function BlitzGameScreen({ miniGame, session }) {
             display: 'flex', flexDirection: 'column', gap: '1vh', alignItems: 'flex-start',
           }}>
             <span style={{ color: '#f97316', fontWeight: 900, fontSize: 'clamp(1.5rem, 3vw, 3.5rem)', letterSpacing: '0.1em' }}>A</span>
-            <span style={{ color: '#fff', fontWeight: 700, fontSize: 'clamp(1.2rem, 2.5vw, 3rem)', lineHeight: 1.1 }}>{currentQ.choiceA}</span>
+            <span style={{ color: '#fff', fontWeight: 700, fontSize: 'clamp(1.2rem, 2.5vw, 3rem)', lineHeight: 1.1 }}>{choiceA}</span>
           </div>
           <div style={{
             flex: 1, borderRadius: 20,
@@ -338,7 +341,7 @@ function BlitzGameScreen({ miniGame, session }) {
             display: 'flex', flexDirection: 'column', gap: '1vh', alignItems: 'flex-start',
           }}>
             <span style={{ color: '#f97316', fontWeight: 900, fontSize: 'clamp(1.5rem, 3vw, 3.5rem)', letterSpacing: '0.1em' }}>B</span>
-            <span style={{ color: '#fff', fontWeight: 700, fontSize: 'clamp(1.2rem, 2.5vw, 3rem)', lineHeight: 1.1 }}>{currentQ.choiceB}</span>
+            <span style={{ color: '#fff', fontWeight: 700, fontSize: 'clamp(1.2rem, 2.5vw, 3rem)', lineHeight: 1.1 }}>{choiceB}</span>
           </div>
         </div>
       </div>
