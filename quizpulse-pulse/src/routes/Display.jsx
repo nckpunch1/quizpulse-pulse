@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { usePulseSession } from '@/hooks/usePulseSession'
+import { ref as rtdbRef, onValue } from 'firebase/database'
+import { db } from '@/lib/firebase'
 
 // ─── Reveal animation ─────────────────────────────────────────────────────────
 
@@ -120,7 +122,7 @@ function IdleScreen() {
           fontSize: 'clamp(4rem, 11vw, 14rem)',
           lineHeight: 1, letterSpacing: '0.04em', textTransform: 'uppercase',
         }}>
-          PULSE BUTTON READY
+          PULSE READY
         </h1>
       </div>
     </div>
@@ -155,7 +157,7 @@ function ActiveScreen() {
           lineHeight: 0.95, textTransform: 'uppercase',
           letterSpacing: '0.03em', marginBottom: '4vh',
         }}>
-          PULSE BUTTON ACTIVE
+          PULSE IS ACTIVE
         </h1>
         <p style={{
           color: '#f97316', fontWeight: 700,
@@ -413,6 +415,16 @@ function BonusGameScreen({ miniGame, winnerName, outcomeType }) {
 export default function Display() {
   const { id: sessionId } = useParams()
   const { teams, state, winnerName, loading, session } = usePulseSession(sessionId)
+
+  const [rtdbConnected, setRtdbConnected] = useState(true)
+
+  useEffect(() => {
+    const connRef = rtdbRef(db, '.info/connected')
+    const unsub = onValue(connRef, (snap) => {
+      setRtdbConnected(snap.val() === true)
+    })
+    return () => unsub()
+  }, [])
   const outcomeType = session?.outcomeType ?? session?.gameType ?? null
   const miniGame = session?.currentGame ?? session?.miniGame ?? null
 
@@ -425,8 +437,16 @@ export default function Display() {
 
   if (!sessionId) {
     return (
-      <div style={{ ...font, height: '100vh', background: '#0a0a0a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <p style={{ color: '#333', fontSize: '1.25rem', fontFamily: 'monospace' }}>No session ID in URL</p>
+      <div style={{ ...font, height: '100vh', background: '#0a0a0a',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', gap: '2vh' }}>
+        <p style={{ color: '#f97316', fontSize: '2rem' }}>⚡</p>
+        <p style={{ color: '#555', fontSize: '1rem',
+          fontFamily: 'monospace', textAlign: 'center', padding: '0 2rem' }}>
+          No session ID in URL.
+          <br />
+          Open this page from the Host Console → Pulse tab → Open Display.
+        </p>
       </div>
     )
   }
@@ -442,16 +462,47 @@ export default function Display() {
     )
   }
 
-  if (state === 'setup' || state === 'complete') return <IdleScreen />
-  if (state === 'active') return <ActiveScreen />
-  if (state === 'revealing') return <RevealingScreen frame={revealFrame} />
-  if (state === 'revealed') return <RevealedScreen displayText={landingTarget} />
-
-  if (state === 'game_active') {
-    if (outcomeType === 'blitz') return <BlitzGameScreen miniGame={miniGame} session={session} />
-    if (outcomeType === 'closest_answer') return <ClosestGameScreen miniGame={miniGame} />
-    return <BonusGameScreen miniGame={miniGame} winnerName={winnerName} outcomeType={outcomeType} />
+  let screen
+  if (state === 'setup' || state === 'complete') screen = <IdleScreen />
+  else if (state === 'active') screen = <ActiveScreen />
+  else if (state === 'revealing') screen = <RevealingScreen frame={revealFrame} />
+  else if (state === 'revealed') screen = <RevealedScreen displayText={landingTarget} />
+  else if (state === 'game_active') {
+    if (outcomeType === 'blitz') screen = <BlitzGameScreen miniGame={miniGame} session={session} />
+    else if (outcomeType === 'closest_answer') screen = <ClosestGameScreen miniGame={miniGame} />
+    else screen = <BonusGameScreen miniGame={miniGame} winnerName={winnerName} outcomeType={outcomeType} />
+  } else {
+    screen = <IdleScreen />
   }
 
-  return <IdleScreen />
+  return (
+    <>
+      {screen}
+      {!rtdbConnected && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 100,
+          background: 'rgba(0,0,0,0.85)',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', gap: '2vh',
+        }}>
+          <style>{`
+            @keyframes spin { to { transform: rotate(360deg) } }
+          `}</style>
+          <div style={{
+            width: 48, height: 48, borderRadius: '50%',
+            border: '3px solid rgba(249,115,22,0.2)',
+            borderTopColor: '#f97316',
+            animation: 'spin 1s linear infinite',
+          }} />
+          <p style={{
+            color: '#f97316', fontWeight: 800,
+            fontSize: 'clamp(1rem,2vw,2rem)',
+            letterSpacing: '0.2em', textTransform: 'uppercase',
+          }}>
+            Reconnecting...
+          </p>
+        </div>
+      )}
+    </>
+  )
 }

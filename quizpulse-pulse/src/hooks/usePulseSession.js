@@ -6,7 +6,7 @@
  * No component should write to Firebase directly.
  */
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { ref, onValue, set, update, push, remove } from 'firebase/database'
 import { db } from '@/lib/firebase'
 import { pickWinner } from '@/lib/weighted-draw'
@@ -24,9 +24,9 @@ function teamRef(id, teamId) { return ref(db, `pulseSessions/${id}/teams/${teamI
 export function usePulseSession(sessionId) {
   const [session, setSession] = useState(null)
   const [teams, setTeams] = useState([])
-  const [questions, setQuestions] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const revealTimerRef = useRef(null)
 
   // Subscribe to session state
   useEffect(() => {
@@ -57,15 +57,6 @@ export function usePulseSession(sessionId) {
 
     return () => unsub()
   }, [sessionId])
-
-  // Subscribe to global question bank
-  useEffect(() => {
-    const unsub = onValue(ref(db, 'pulseQuestions'), snapshot => {
-      const data = snapshot.val() || {}
-      setQuestions(Object.entries(data).map(([id, q]) => ({ id, ...q })))
-    })
-    return () => unsub()
-  }, [])
 
   // ─── Admin: Create session ───────────────────────────────────────────────────
 
@@ -152,7 +143,9 @@ export function usePulseSession(sessionId) {
       winnerId: winner.id,
       winnerName: winner.name,
     })
-    setTimeout(async () => {
+    if (revealTimerRef.current) clearTimeout(revealTimerRef.current)
+    revealTimerRef.current = setTimeout(async () => {
+      revealTimerRef.current = null
       await update(sessionRef(sessionId), { state: 'revealed' })
     }, 5000)
   }, [sessionId, teams])
@@ -180,6 +173,10 @@ export function usePulseSession(sessionId) {
 
   const resetSession = useCallback(async () => {
     if (!sessionId) return
+    if (revealTimerRef.current) {
+      clearTimeout(revealTimerRef.current)
+      revealTimerRef.current = null
+    }
     await Promise.all([
       update(sessionRef(sessionId), {
         state: 'setup',
@@ -222,7 +219,6 @@ export function usePulseSession(sessionId) {
     // State
     session,
     teams,
-    questions,
     loading,
     error,
 
