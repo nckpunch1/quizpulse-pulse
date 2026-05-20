@@ -410,6 +410,325 @@ function BonusGameScreen({ miniGame, winnerName, outcomeType }) {
   )
 }
 
+// ─── Shock The Room display ───────────────────────────────────────────────────
+
+function ShockTheRoomDisplay({ game }) {
+  const isPulse = game.result === 'pulse'
+  const isFlatline = game.result === 'flatline'
+  const isCharging = game.phase === 'charging'
+  const isShocked = game.phase === 'shocked'
+  const isChoosing = game.phase === 'choosing'
+  const isComplete = game.phase === 'complete'
+  const isFinal = game.isFinalRound
+
+  return (
+    <div style={{
+      height: '100vh',
+      background: isShocked && isPulse
+        ? '#001a00'
+        : isShocked && isFlatline
+        ? '#1a0000'
+        : '#0a0a0f',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontFamily: "'Barlow Condensed', sans-serif",
+      overflow: 'hidden',
+      position: 'relative',
+      transition: 'background 0.5s ease',
+    }}>
+
+      <style>{`
+        @keyframes electricPulse {
+          0%, 100% { opacity: 0.4; transform: scaleY(1); }
+          50% { opacity: 1; transform: scaleY(1.3); }
+        }
+        @keyframes heartbeat {
+          0% { stroke-dashoffset: 1000; }
+          100% { stroke-dashoffset: 0; }
+        }
+        @keyframes glowPulse {
+          0%, 100% { box-shadow: 0 0 20px #00ff88; }
+          50% { box-shadow: 0 0 60px #00ff88, 0 0 100px #00ff88; }
+        }
+        @keyframes flatlineGlow {
+          0%, 100% { box-shadow: 0 0 20px #ff2222; }
+          50% { box-shadow: 0 0 60px #ff2222; }
+        }
+        @keyframes shakeX {
+          0%, 100% { transform: translateX(0); }
+          20% { transform: translateX(-8px); }
+          40% { transform: translateX(8px); }
+          60% { transform: translateX(-5px); }
+          80% { transform: translateX(5px); }
+        }
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(30px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes chargeFlicker {
+          0%, 100% { opacity: 1; }
+          45% { opacity: 0.7; }
+          50% { opacity: 1; }
+          70% { opacity: 0.5; }
+          75% { opacity: 1; }
+        }
+      `}</style>
+
+      {/* Round + Players info */}
+      <div style={{
+        position: 'absolute', top: '4vh',
+        display: 'flex', gap: '3vw',
+        fontSize: 'clamp(0.8rem, 1.5vw, 1.4rem)',
+        color: 'rgba(255,255,255,0.4)',
+        letterSpacing: '0.2em', textTransform: 'uppercase',
+      }}>
+        <span>Round {game.round}</span>
+        <span>·</span>
+        <span>{game.playersIn} remaining</span>
+        {isFinal && (
+          <span style={{ color: '#f97316', fontWeight: 900 }}>
+            · FINAL ROUND
+          </span>
+        )}
+      </div>
+
+      {/* Main title */}
+      {!isShocked && !isComplete && (
+        <p style={{
+          fontSize: 'clamp(2rem, 5vw, 4.5rem)',
+          fontWeight: 900,
+          color: '#ffffff',
+          letterSpacing: '0.15em',
+          textTransform: 'uppercase',
+          marginBottom: '4vh',
+          animation: isCharging
+            ? 'chargeFlicker 0.3s ease-in-out infinite'
+            : 'none',
+        }}>
+          {isFinal ? '⚡ FINAL SHOWDOWN' : '⚡ SHOCK THE ROOM'}
+        </p>
+      )}
+
+      {/* Voting instruction */}
+      {isChoosing && (
+        <div style={{
+          display: 'flex', gap: '6vw',
+          animation: 'fadeInUp 0.4s ease',
+        }}>
+          <div style={{ textAlign: 'center' }}>
+            <p style={{ fontSize: 'clamp(3rem,8vw,7rem)' }}>🙌</p>
+            <p style={{
+              fontSize: 'clamp(1.2rem,3vw,2.5rem)',
+              fontWeight: 900, color: '#00ff88',
+              letterSpacing: '0.1em',
+            }}>
+              HANDS UP
+            </p>
+            <p style={{
+              color: '#00ff88', opacity: 0.7,
+              fontSize: 'clamp(0.8rem,1.5vw,1.2rem)',
+            }}>
+              = PULSE
+            </p>
+          </div>
+          <div style={{
+            width: 2, background: 'rgba(255,255,255,0.15)',
+            borderRadius: 2,
+          }} />
+          <div style={{ textAlign: 'center' }}>
+            <p style={{ fontSize: 'clamp(3rem,8vw,7rem)' }}>🤲</p>
+            <p style={{
+              fontSize: 'clamp(1.2rem,3vw,2.5rem)',
+              fontWeight: 900, color: '#ff4444',
+              letterSpacing: '0.1em',
+            }}>
+              HANDS DOWN
+            </p>
+            <p style={{
+              color: '#ff4444', opacity: 0.7,
+              fontSize: 'clamp(0.8rem,1.5vw,1.2rem)',
+            }}>
+              = FLATLINE
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Charging animation */}
+      {isCharging && (
+        <div style={{
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', gap: '3vh',
+          animation: 'fadeInUp 0.3s ease',
+        }}>
+          <div style={{ display: 'flex', gap: '4vw', alignItems: 'center' }}>
+            {/* Left paddle */}
+            <div style={{
+              width: 'clamp(60px,8vw,100px)',
+              height: 'clamp(80px,12vw,140px)',
+              background: 'linear-gradient(180deg, #444 0%, #222 100%)',
+              borderRadius: 12,
+              border: '3px solid #f97316',
+              boxShadow: '0 0 30px rgba(249,115,22,0.6)',
+              animation: 'electricPulse 0.4s ease-in-out infinite',
+            }} />
+
+            {/* ECG flat line with electric sparks */}
+            <div style={{
+              width: 'clamp(150px,25vw,350px)',
+              position: 'relative',
+            }}>
+              <svg width="100%" height="60" viewBox="0 0 300 60">
+                <line x1="0" y1="30" x2="300" y2="30"
+                  stroke="#f97316" strokeWidth="3"
+                  opacity="0.8" />
+                {[50, 100, 150, 200, 250].map((x, i) => (
+                  <line key={i}
+                    x1={x} y1="20" x2={x + 10} y2="40"
+                    stroke="#fff" strokeWidth="2"
+                    style={{
+                      animation: `electricPulse ${0.2 + i * 0.05}s ease-in-out infinite`,
+                      animationDelay: `${i * 0.08}s`,
+                    }}
+                  />
+                ))}
+              </svg>
+            </div>
+
+            {/* Right paddle */}
+            <div style={{
+              width: 'clamp(60px,8vw,100px)',
+              height: 'clamp(80px,12vw,140px)',
+              background: 'linear-gradient(180deg, #444 0%, #222 100%)',
+              borderRadius: 12,
+              border: '3px solid #f97316',
+              boxShadow: '0 0 30px rgba(249,115,22,0.6)',
+              animation: 'electricPulse 0.4s ease-in-out infinite 0.2s',
+            }} />
+          </div>
+          <p style={{
+            color: '#f97316', fontWeight: 900,
+            fontSize: 'clamp(1.5rem,4vw,3.5rem)',
+            letterSpacing: '0.3em',
+            animation: 'chargeFlicker 0.3s infinite',
+          }}>
+            CHARGING...
+          </p>
+        </div>
+      )}
+
+      {/* Result — PULSE */}
+      {isShocked && isPulse && (
+        <div style={{
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', gap: '3vh',
+          animation: 'fadeInUp 0.3s ease',
+        }}>
+          <p style={{
+            fontSize: 'clamp(3rem,9vw,8rem)',
+            fontWeight: 900, color: '#00ff88',
+            letterSpacing: '0.1em',
+            animation: 'glowPulse 1.5s ease-in-out infinite',
+            textShadow: '0 0 40px #00ff88',
+          }}>
+            💚 PULSE!
+          </p>
+          <svg width="clamp(200px,50vw,600px)" height="80" viewBox="0 0 600 80">
+            <polyline
+              points="0,40 100,40 130,40 150,5 170,75 190,40 220,40 260,40 290,40 310,5 330,75 350,40 380,40 600,40"
+              fill="none"
+              stroke="#00ff88"
+              strokeWidth="4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{
+                strokeDasharray: 1000,
+                strokeDashoffset: 0,
+                animation: 'heartbeat 1s ease-out forwards',
+              }}
+            />
+          </svg>
+          <p style={{
+            color: 'rgba(0,255,136,0.6)',
+            fontSize: 'clamp(0.9rem,2vw,1.5rem)',
+            letterSpacing: '0.2em',
+          }}>
+            HANDS UP SURVIVE
+          </p>
+        </div>
+      )}
+
+      {/* Result — FLATLINE */}
+      {isShocked && isFlatline && (
+        <div style={{
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', gap: '3vh',
+          animation: 'shakeX 0.5s ease',
+        }}>
+          <p style={{
+            fontSize: 'clamp(3rem,9vw,8rem)',
+            fontWeight: 900, color: '#ff2222',
+            letterSpacing: '0.1em',
+            textShadow: '0 0 40px #ff2222',
+            animation: 'flatlineGlow 1.5s ease-in-out infinite',
+          }}>
+            💀 FLATLINE
+          </p>
+          <svg width="clamp(200px,50vw,600px)" height="80" viewBox="0 0 600 80">
+            <line x1="0" y1="40" x2="600" y2="40"
+              stroke="#ff2222" strokeWidth="4"
+              strokeLinecap="round" />
+          </svg>
+          <p style={{
+            color: 'rgba(255,34,34,0.6)',
+            fontSize: 'clamp(0.9rem,2vw,1.5rem)',
+            letterSpacing: '0.2em',
+          }}>
+            HANDS DOWN SURVIVE
+          </p>
+        </div>
+      )}
+
+      {/* Complete — Winner */}
+      {isComplete && (
+        <div style={{
+          textAlign: 'center',
+          animation: 'fadeInUp 0.5s ease',
+        }}>
+          <p style={{
+            fontSize: 'clamp(1.5rem,4vw,3rem)',
+            color: '#f97316', fontWeight: 900,
+            letterSpacing: '0.2em', marginBottom: '2vh',
+          }}>
+            🏆 SURVIVOR
+          </p>
+          <p style={{
+            fontSize: 'clamp(3rem,10vw,9rem)',
+            fontWeight: 900, color: '#ffffff',
+            lineHeight: 1,
+            textShadow: '0 0 40px rgba(249,115,22,0.5)',
+          }}>
+            {game.winnerName ?? 'WINNER'}
+          </p>
+        </div>
+      )}
+
+      {/* Bottom label */}
+      <p style={{
+        position: 'absolute', bottom: '3vh',
+        color: 'rgba(255,255,255,0.15)',
+        fontSize: 'clamp(0.6rem,1vw,0.9rem)',
+        letterSpacing: '0.3em',
+        textTransform: 'uppercase',
+      }}>
+        Shock The Room
+      </p>
+    </div>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Display() {
@@ -420,6 +739,7 @@ export default function Display() {
   const [audioEnabled, setAudioEnabled] = useState(false)
 
   const [rtdbConnected, setRtdbConnected] = useState(true)
+  const [shockGame, setShockGame] = useState(null)
 
   useEffect(() => {
     const connRef = rtdbRef(db, '.info/connected')
@@ -428,6 +748,15 @@ export default function Display() {
     })
     return () => unsub()
   }, [])
+
+  useEffect(() => {
+    if (!sessionId) return
+    const shockRef = rtdbRef(db, `shockTheRoom/${sessionId}`)
+    const unsubShock = onValue(shockRef, snap => {
+      setShockGame(snap.val())
+    })
+    return () => unsubShock()
+  }, [sessionId])
 
   useEffect(() => {
     const audio = audioRef.current
@@ -477,6 +806,10 @@ export default function Display() {
         }} />
       </div>
     )
+  }
+
+  if (shockGame && shockGame.phase !== null) {
+    return <ShockTheRoomDisplay game={shockGame} />
   }
 
   let screen
