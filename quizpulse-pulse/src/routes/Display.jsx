@@ -416,6 +416,9 @@ export default function Display() {
   const { id: sessionId } = useParams()
   const { teams, state, winnerName, loading, session } = usePulseSession(sessionId)
 
+  const audioRef = useRef(null)
+  const [audioEnabled, setAudioEnabled] = useState(false)
+
   const [rtdbConnected, setRtdbConnected] = useState(true)
 
   useEffect(() => {
@@ -425,6 +428,20 @@ export default function Display() {
     })
     return () => unsub()
   }, [])
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio || !audioEnabled) return
+
+    if (session?.state === 'active') {
+      audio.currentTime = 0
+      audio.play().catch(console.error)
+    } else {
+      audio.pause()
+      audio.currentTime = 0
+    }
+  }, [session?.state, audioEnabled])
+
   const outcomeType = session?.outcomeType ?? session?.gameType ?? null
   const miniGame = session?.currentGame ?? session?.miniGame ?? null
 
@@ -477,6 +494,31 @@ export default function Display() {
 
   return (
     <>
+      {!audioEnabled && (
+        <div
+          onClick={() => setAudioEnabled(true)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(0,0,0,0.85)',
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', gap: '1rem',
+          }}
+        >
+          <p style={{ fontSize: '3rem' }}>🔊</p>
+          <p style={{
+            color: '#fff', fontWeight: 800,
+            fontSize: 'clamp(1rem, 3vw, 2rem)',
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+          }}>
+            Click to enable audio
+          </p>
+          <p style={{ color: '#555', fontSize: '0.9rem' }}>
+            Required once per session
+          </p>
+        </div>
+      )}
       {screen}
       {!rtdbConnected && (
         <div style={{
@@ -503,6 +545,11 @@ export default function Display() {
           </p>
         </div>
       )}
+      <audio
+        ref={audioRef}
+        src="/OrangeArenaPulse.mp3"
+        preload="auto"
+      />
     </>
   )
 }
