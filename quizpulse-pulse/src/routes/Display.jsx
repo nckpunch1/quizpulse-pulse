@@ -773,6 +773,7 @@ export default function Display() {
 
   const outcomeType = session?.outcomeType ?? session?.gameType ?? null
   const miniGame = session?.currentGame ?? session?.miniGame ?? null
+  const currentGame = session?.currentGame
 
   const landingTarget =
     outcomeType === 'blitz' ? 'SUDDEN DEATH BLITZ' :
@@ -810,6 +811,217 @@ export default function Display() {
 
   if (shockGame && shockGame.phase !== null) {
     return <ShockTheRoomDisplay game={shockGame} />
+  }
+
+  if (state === 'game_active' && currentGame?.type === 'closest_answer') {
+    return (
+      <div style={{
+        height: '100vh', background: '#0a0a0f',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        fontFamily: "'Barlow Condensed', sans-serif",
+        padding: '4vw',
+      }}>
+        <style>{`
+          @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+        `}</style>
+        <p style={{
+          fontSize: 'clamp(0.8rem,1.5vw,1.2rem)',
+          color: '#f97316', fontWeight: 700,
+          letterSpacing: '0.3em', textTransform: 'uppercase',
+          marginBottom: '3vh', animation: 'fadeUp 0.4s ease',
+        }}>
+          🎯 Closest Answer
+        </p>
+        <p style={{
+          fontSize: 'clamp(1.8rem,5vw,4.5rem)',
+          fontWeight: 900, color: '#ffffff',
+          textAlign: 'center', lineHeight: 1.2,
+          maxWidth: '80vw',
+          animation: 'fadeUp 0.5s ease 0.15s both',
+        }}>
+          {currentGame.question}
+        </p>
+        <p style={{
+          marginTop: '4vh',
+          fontSize: 'clamp(0.8rem,1.5vw,1.2rem)',
+          color: 'rgba(255,255,255,0.3)',
+          animation: 'fadeUp 0.5s ease 0.3s both',
+        }}>
+          Write your answer — closest wins
+        </p>
+      </div>
+    )
+  }
+
+  if (state === 'game_active' && currentGame?.type === 'beer_shock') {
+    return (
+      <div style={{
+        height: '100vh',
+        background: 'radial-gradient(ellipse at center, #1a0f00 0%, #0a0a0a 70%)',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        fontFamily: "'Barlow Condensed', sans-serif",
+        overflow: 'hidden', position: 'relative',
+      }}>
+        <style>{`
+          @keyframes bubble {
+            0% { transform: translateY(100vh) scale(0.5); opacity: 0; }
+            50% { opacity: 0.6; }
+            100% { transform: translateY(-10vh) scale(1.2); opacity: 0; }
+          }
+          @keyframes beerReveal {
+            0% { opacity: 0; transform: scale(0.3) rotate(-5deg); }
+            60% { transform: scale(1.08) rotate(1deg); }
+            100% { opacity: 1; transform: scale(1) rotate(0deg); }
+          }
+          @keyframes glowAmber {
+            0%, 100% { text-shadow: 0 0 30px rgba(251,191,36,0.5); }
+            50% { text-shadow: 0 0 60px rgba(251,191,36,0.9), 0 0 100px rgba(251,191,36,0.4); }
+          }
+        `}</style>
+
+        {[...Array(12)].map((_, i) => (
+          <div key={i} style={{
+            position: 'absolute',
+            width: `${8 + Math.random() * 20}px`,
+            height: `${8 + Math.random() * 20}px`,
+            borderRadius: '50%',
+            background: 'rgba(251,191,36,0.3)',
+            left: `${Math.random() * 100}%`,
+            animation: `bubble ${2 + Math.random() * 3}s ease-in infinite`,
+            animationDelay: `${Math.random() * 3}s`,
+          }} />
+        ))}
+
+        <p style={{
+          fontSize: 'clamp(3rem,10vw,9rem)',
+          marginBottom: '2vh', zIndex: 1,
+          animation: 'beerReveal 0.6s cubic-bezier(0.34,1.56,0.64,1)',
+        }}>🍺</p>
+
+        <p style={{
+          fontSize: 'clamp(1rem,2.5vw,2rem)',
+          color: '#fbbf24', fontWeight: 700,
+          letterSpacing: '0.3em', textTransform: 'uppercase',
+          marginBottom: '2vh', zIndex: 1,
+          animation: 'beerReveal 0.5s ease 0.2s both',
+        }}>
+          Beer Shock
+        </p>
+
+        <p style={{
+          fontSize: 'clamp(3rem,9vw,8rem)',
+          fontWeight: 900, color: '#ffffff',
+          textAlign: 'center', zIndex: 1,
+          lineHeight: 1, maxWidth: '90vw',
+          animation: 'beerReveal 0.6s cubic-bezier(0.34,1.56,0.64,1) 0.3s both',
+          animationFillMode: 'both',
+        }}>
+          {currentGame.teamName}
+        </p>
+
+        <p style={{
+          marginTop: '3vh', zIndex: 1,
+          fontSize: 'clamp(0.8rem,1.5vw,1.3rem)',
+          color: 'rgba(251,191,36,0.6)',
+          letterSpacing: '0.15em',
+          animation: 'glowAmber 2s ease-in-out infinite',
+        }}>
+          First to finish drinks gets to answer
+        </p>
+      </div>
+    )
+  }
+
+  if (state === 'game_active' && currentGame?.type === 'prize_drop') {
+    return (
+      <div style={{
+        height: '100vh',
+        background: '#0a0a0f',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        fontFamily: "'Barlow Condensed', sans-serif",
+        overflow: 'hidden',
+      }}>
+        <style>{`
+          @keyframes dropIn {
+            0% { transform: translateY(-100vh) rotate(-3deg); opacity: 0; }
+            70% { transform: translateY(10px) rotate(1deg); opacity: 1; }
+            85% { transform: translateY(-5px) rotate(-0.5deg); }
+            100% { transform: translateY(0) rotate(0); opacity: 1; }
+          }
+          @keyframes shimmer {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+          }
+          @keyframes sparkle {
+            0%, 100% { transform: scale(1) rotate(0deg); opacity: 1; }
+            50% { transform: scale(1.3) rotate(180deg); opacity: 0.8; }
+          }
+        `}</style>
+
+        {['✨','⭐','✨','🌟','✨'].map((s, i) => (
+          <div key={i} style={{
+            position: 'absolute',
+            fontSize: 'clamp(1rem,3vw,2.5rem)',
+            left: `${10 + i * 20}%`,
+            top: `${20 + (i % 3) * 20}%`,
+            animation: `sparkle ${1 + i * 0.3}s ease-in-out infinite`,
+            animationDelay: `${i * 0.2}s`,
+          }}>{s}</div>
+        ))}
+
+        <p style={{
+          fontSize: 'clamp(1rem,2vw,1.8rem)',
+          color: '#f97316', fontWeight: 700,
+          letterSpacing: '0.3em', textTransform: 'uppercase',
+          marginBottom: '4vh',
+        }}>
+          🎁 Prize Drop
+        </p>
+
+        <div style={{
+          background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+          border: '2px solid rgba(249,115,22,0.5)',
+          borderRadius: 20,
+          padding: 'clamp(2rem,5vw,4rem) clamp(3rem,8vw,7rem)',
+          textAlign: 'center',
+          boxShadow: '0 0 60px rgba(249,115,22,0.2)',
+          animation: 'dropIn 0.8s cubic-bezier(0.34,1.2,0.64,1)',
+          position: 'relative', zIndex: 1,
+          maxWidth: '80vw',
+        }}>
+          <p style={{
+            fontSize: 'clamp(0.8rem,1.5vw,1.2rem)',
+            color: 'rgba(255,255,255,0.4)',
+            letterSpacing: '0.2em', marginBottom: '1rem',
+            textTransform: 'uppercase',
+          }}>
+            Tonight's prize
+          </p>
+          <p style={{
+            fontSize: 'clamp(2rem,6vw,5.5rem)',
+            fontWeight: 900, color: '#ffffff',
+            margin: 0, lineHeight: 1.1,
+            animation: 'shimmer 2s ease-in-out infinite',
+          }}>
+            {currentGame.prizeName}
+          </p>
+        </div>
+
+        <p style={{
+          marginTop: '4vh',
+          fontSize: 'clamp(0.8rem,1.5vw,1.2rem)',
+          color: 'rgba(255,255,255,0.25)',
+        }}>
+          Speak to your host to claim
+        </p>
+      </div>
+    )
   }
 
   let screen
