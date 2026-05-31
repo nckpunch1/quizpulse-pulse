@@ -1040,6 +1040,8 @@ export default function Display() {
   const chargingAudioRef = useRef(null)
   const successAudioRef = useRef(null)
   const flatlineAudioRef = useRef(null)
+  const beerAudioRef = useRef(null)
+  const prizesAudioRef = useRef(null)
   const [audioEnabled, setAudioEnabled] = useState(false)
 
   const [rtdbConnected, setRtdbConnected] = useState(true)
@@ -1071,12 +1073,12 @@ export default function Display() {
       || session?.state === 'game_active'
       || session?.state === 'pulse_active'
 
-    // Mute background music during Shock The Room
-    const shockActive = shockGame &&
-      shockGame.phase !== null &&
-      shockGame.phase !== 'complete'
+    const muteBackground =
+      (shockGame && shockGame.phase !== null && shockGame.phase !== 'complete') ||
+      currentGame?.type === 'beer_shock' ||
+      currentGame?.type === 'prize_drop'
 
-    if (sessionIsLive && audioEnabled && !shockActive) {
+    if (sessionIsLive && audioEnabled && !muteBackground) {
       if (audio.paused) {
         audio.play().catch(console.error)
       }
@@ -1084,7 +1086,7 @@ export default function Display() {
       audio.pause()
       if (!sessionIsLive) audio.currentTime = 0
     }
-  }, [session?.state, audioEnabled, shockGame])
+  }, [session?.state, audioEnabled, shockGame, currentGame?.type])
 
   useEffect(() => {
     if (!audioEnabled) return
@@ -1130,6 +1132,32 @@ export default function Display() {
       stopAll()
     }
   }, [shockGame?.phase, shockGame?.result, audioEnabled])
+
+  useEffect(() => {
+    if (!audioEnabled) return
+
+    const beer = beerAudioRef.current
+    const prizes = prizesAudioRef.current
+    if (!beer || !prizes) return
+
+    const type = currentGame?.type
+    const phase = currentGame?.phase
+
+    beer.pause()
+    beer.currentTime = 0
+    prizes.pause()
+    prizes.currentTime = 0
+
+    if (type === 'beer_shock' && phase === 'active') {
+      beer.play().catch(console.error)
+      return
+    }
+
+    if (type === 'prize_drop' && phase === 'active') {
+      prizes.play().catch(console.error)
+      return
+    }
+  }, [currentGame?.type, currentGame?.phase, currentGame?.startedAt, audioEnabled])
 
   const outcomeType = session?.outcomeType ?? session?.gameType ?? null
   const miniGame = session?.currentGame ?? session?.miniGame ?? null
@@ -1384,6 +1412,10 @@ export default function Display() {
         src="/SuccessShock.aif" preload="auto" />
       <audio ref={flatlineAudioRef}
         src="/Flatline.aif" preload="auto" />
+      <audio ref={beerAudioRef}
+        src="/Beer.aif" preload="auto" />
+      <audio ref={prizesAudioRef}
+        src="/prizes.mp3" preload="auto" />
     </>
   )
 }
