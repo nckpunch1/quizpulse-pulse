@@ -731,23 +731,36 @@ function ShockTheRoomDisplay({ game }) {
 
 // ─── Prize Drop display ───────────────────────────────────────────────────────
 
-function PrizeDropDisplay({ prizeName }) {
-  const [phase, setPhase] = useState('intro')
-  // intro → spinning → revealing → revealed
+function PrizeDropDisplay({ phase, prizes, prizeName }) {
+  const [animPhase, setAnimPhase] = useState(
+    phase === 'dropping' ? 'spinning' : 'waiting'
+  )
 
   useEffect(() => {
-    const t1 = setTimeout(() => setPhase('spinning'), 500)
-    const t2 = setTimeout(() => setPhase('revealing'), 3500)
-    const t3 = setTimeout(() => setPhase('revealed'), 4200)
+    if (phase !== 'dropping') {
+      setAnimPhase('waiting')
+      return
+    }
+    setAnimPhase('spinning')
+    const t1 = setTimeout(() => setAnimPhase('revealing'), 3500)
+    const t2 = setTimeout(() => setAnimPhase('revealed'), 4200)
     return () => {
       clearTimeout(t1)
       clearTimeout(t2)
-      clearTimeout(t3)
     }
-  }, [])
+  }, [phase])
 
-  const fakeSlots = ['🎁', '⚡', '🏆', '🎯', '💥',
-    '🎁', '⚡', '🏆', '🎯', '💥']
+  const buildReel = () => {
+    if (!prizes || prizes.length === 0)
+      return ['🎁', '🎁', '🎁', prizeName]
+    const repeated = []
+    while (repeated.length < 20) {
+      repeated.push(...prizes)
+    }
+    repeated.push(prizeName)
+    return repeated
+  }
+  const reelItems = buildReel()
 
   return (
     <div style={{
@@ -766,10 +779,6 @@ function PrizeDropDisplay({ prizeName }) {
           0% { transform: translateY(-100%); }
           100% { transform: translateY(100vh); }
         }
-        @keyframes prizeIntro {
-          0% { opacity: 0; transform: translateY(-40px); }
-          100% { opacity: 1; transform: translateY(0); }
-        }
         @keyframes slotSpin {
           0% { transform: translateY(0); }
           100% { transform: translateY(-1000px); }
@@ -779,30 +788,19 @@ function PrizeDropDisplay({ prizeName }) {
           100% { transform: translateY(-400px); }
         }
         @keyframes prizeDrop {
-          0% {
-            transform: translateY(-120vh) rotate(-3deg) scale(1.3);
-            opacity: 0;
-          }
-          60% {
-            transform: translateY(18px) rotate(1deg) scale(0.97);
-            opacity: 1;
-          }
-          75% {
-            transform: translateY(-8px) rotate(-0.5deg) scale(1.01);
-          }
+          0% { transform: translateY(-120vh) rotate(-3deg) scale(1.3); opacity: 0; }
+          60% { transform: translateY(18px) rotate(1deg) scale(0.97); opacity: 1; }
+          75% { transform: translateY(-8px) rotate(-0.5deg) scale(1.01); }
           90% { transform: translateY(4px) rotate(0); }
           100% { transform: translateY(0) rotate(0) scale(1); }
         }
         @keyframes pulseGlow {
-          0%, 100% {
-            box-shadow: 0 0 30px rgba(249,115,22,0.4),
-                        0 0 60px rgba(249,115,22,0.1);
-          }
-          50% {
-            box-shadow: 0 0 60px rgba(249,115,22,0.8),
-                        0 0 120px rgba(249,115,22,0.3),
-                        0 0 200px rgba(249,115,22,0.1);
-          }
+          0%, 100% { box-shadow: 0 0 30px rgba(249,115,22,0.4); }
+          50% { box-shadow: 0 0 80px rgba(249,115,22,0.8), 0 0 160px rgba(249,115,22,0.2); }
+        }
+        @keyframes screenFlash {
+          0%, 100% { opacity: 0; }
+          50% { opacity: 0.15; }
         }
         @keyframes electricFlicker {
           0%, 100% { opacity: 1; }
@@ -816,13 +814,13 @@ function PrizeDropDisplay({ prizeName }) {
           0% { transform: translateY(0) rotate(0deg); opacity: 1; }
           100% { transform: translateY(-200px) rotate(720deg); opacity: 0; }
         }
-        @keyframes screenFlash {
-          0%, 100% { opacity: 0; }
-          50% { opacity: 0.15; }
+        @keyframes waitingPulse {
+          0%, 100% { opacity: 0.3; transform: scale(1); }
+          50% { opacity: 0.7; transform: scale(1.03); }
         }
       `}</style>
 
-      {/* Scanline effect */}
+      {/* Scanline */}
       <div style={{
         position: 'absolute', inset: 0,
         background: 'linear-gradient(transparent 50%, rgba(0,0,0,0.03) 50%)',
@@ -831,7 +829,7 @@ function PrizeDropDisplay({ prizeName }) {
       }} />
 
       {/* Screen flash on reveal */}
-      {phase === 'revealing' && (
+      {animPhase === 'revealing' && (
         <div style={{
           position: 'absolute', inset: 0,
           background: '#f97316',
@@ -840,9 +838,10 @@ function PrizeDropDisplay({ prizeName }) {
         }} />
       )}
 
-      {/* Floating particles when revealed */}
-      {phase === 'revealed' && (
-        ['✨','⭐','💥','✨','⭐','💫','✨','⭐'].map((s, i) => (
+      {/* Particles on reveal */}
+      {animPhase === 'revealed' && (
+        ['✨','⭐','💥','✨','⭐','💫','✨','⭐']
+        .map((s, i) => (
           <div key={i} style={{
             position: 'absolute',
             fontSize: 'clamp(1rem,2.5vw,2rem)',
@@ -855,17 +854,12 @@ function PrizeDropDisplay({ prizeName }) {
         ))
       )}
 
-      {/* INTRO PHASE */}
-      {phase === 'intro' && (
-        <div style={{
-          textAlign: 'center',
-          animation: 'prizeIntro 0.4s ease',
-          zIndex: 3,
-        }}>
+      {/* WAITING — shown between drops */}
+      {animPhase === 'waiting' && (
+        <div style={{ textAlign: 'center', zIndex: 3 }}>
           <p style={{
             fontSize: 'clamp(1rem,3vw,2.5rem)',
-            color: '#f97316',
-            fontWeight: 700,
+            color: '#f97316', fontWeight: 700,
             letterSpacing: '0.4em',
             textTransform: 'uppercase',
             marginBottom: '3vh',
@@ -875,24 +869,44 @@ function PrizeDropDisplay({ prizeName }) {
           <p style={{
             fontSize: 'clamp(2rem,7vw,6rem)',
             fontWeight: 900,
-            color: 'rgba(255,255,255,0.15)',
-            letterSpacing: '0.1em',
+            color: 'rgba(255,255,255,0.1)',
+            animation: 'waitingPulse 2s ease-in-out infinite',
           }}>
-            LOADING...
+            READY
           </p>
+          {prizes && prizes.length > 0 && (
+            <div style={{
+              marginTop: '3vh',
+              display: 'flex',
+              flexWrap: 'wrap',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              maxWidth: '70vw',
+            }}>
+              {prizes.map((p, i) => (
+                <span key={i} style={{
+                  fontSize: 'clamp(0.7rem,1.2vw,1rem)',
+                  color: 'rgba(255,255,255,0.25)',
+                  background: 'rgba(249,115,22,0.08)',
+                  border: '1px solid rgba(249,115,22,0.15)',
+                  borderRadius: 99,
+                  padding: '4px 12px',
+                }}>
+                  {p}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* SPINNING PHASE — slot machine */}
-      {(phase === 'spinning' || phase === 'revealing') && (
-        <div style={{
-          textAlign: 'center', zIndex: 3,
-          width: '100%',
-        }}>
+      {/* SPINNING — slot machine */}
+      {(animPhase === 'spinning' ||
+        animPhase === 'revealing') && (
+        <div style={{ textAlign: 'center', zIndex: 3, width: '100%' }}>
           <p style={{
             fontSize: 'clamp(0.8rem,1.8vw,1.5rem)',
-            color: '#f97316',
-            fontWeight: 700,
+            color: '#f97316', fontWeight: 700,
             letterSpacing: '0.4em',
             textTransform: 'uppercase',
             marginBottom: '4vh',
@@ -901,11 +915,10 @@ function PrizeDropDisplay({ prizeName }) {
             ⚡ Prize Drop
           </p>
 
-          {/* Slot window */}
           <div style={{
             position: 'relative',
-            width: 'clamp(280px,60vw,700px)',
-            height: 'clamp(100px,18vh,180px)',
+            width: 'clamp(280px,70vw,800px)',
+            height: 'clamp(80px,14vh,140px)',
             margin: '0 auto',
             overflow: 'hidden',
             border: '2px solid rgba(249,115,22,0.5)',
@@ -913,57 +926,57 @@ function PrizeDropDisplay({ prizeName }) {
             background: '#111',
             boxShadow: '0 0 40px rgba(249,115,22,0.2)',
           }}>
-            {/* Top fade */}
+            {/* Fades */}
             <div style={{
               position: 'absolute', top: 0, left: 0,
-              right: 0, height: '30%', zIndex: 2,
+              right: 0, height: '35%', zIndex: 2,
               background: 'linear-gradient(#111, transparent)',
             }} />
-            {/* Bottom fade */}
             <div style={{
               position: 'absolute', bottom: 0, left: 0,
-              right: 0, height: '30%', zIndex: 2,
+              right: 0, height: '35%', zIndex: 2,
               background: 'linear-gradient(transparent, #111)',
             }} />
-            {/* Center highlight line */}
+            {/* Centre line */}
             <div style={{
-              position: 'absolute', top: '50%',
-              left: 0, right: 0, height: 2,
+              position: 'absolute', top: '50%', left: 0,
+              right: 0, height: 2,
               background: 'rgba(249,115,22,0.6)',
               transform: 'translateY(-50%)', zIndex: 3,
               boxShadow: '0 0 10px rgba(249,115,22,0.8)',
             }} />
 
-            {/* Spinning tiles */}
+            {/* Reel */}
             <div style={{
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              animation: phase === 'spinning'
-                ? 'slotSpin 0.3s linear infinite'
-                : 'slotSlowSpin 0.8s ease-out forwards',
+              animation: animPhase === 'spinning'
+                ? 'slotSpin 0.25s linear infinite'
+                : 'slotSlowSpin 0.9s ease-out forwards',
             }}>
-              {[...fakeSlots, ...fakeSlots, prizeName].map(
-                (item, i) => (
-                  <div key={i} style={{
-                    height: 'clamp(100px,18vh,180px)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 'clamp(1.5rem,4vw,3.5rem)',
-                    fontWeight: 900,
-                    color: item === prizeName
-                      ? '#f97316' : 'rgba(255,255,255,0.4)',
-                    letterSpacing: '0.05em',
-                    flexShrink: 0,
-                    width: '100%',
-                    textAlign: 'center',
-                    padding: '0 1rem',
-                  }}>
-                    {item}
-                  </div>
-                )
-              )}
+              {reelItems.map((item, i) => (
+                <div key={i} style={{
+                  height: 'clamp(80px,14vh,140px)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: i === reelItems.length - 1
+                    ? 'clamp(1.2rem,3.5vw,3rem)'
+                    : 'clamp(0.9rem,2.5vw,2rem)',
+                  fontWeight: 900,
+                  color: i === reelItems.length - 1
+                    ? '#f97316'
+                    : 'rgba(255,255,255,0.35)',
+                  flexShrink: 0,
+                  width: '100%',
+                  textAlign: 'center',
+                  padding: '0 2rem',
+                  letterSpacing: '0.02em',
+                }}>
+                  {item}
+                </div>
+              ))}
             </div>
           </div>
 
@@ -978,23 +991,21 @@ function PrizeDropDisplay({ prizeName }) {
         </div>
       )}
 
-      {/* REVEALED PHASE */}
-      {phase === 'revealed' && (
+      {/* REVEALED */}
+      {animPhase === 'revealed' && (
         <div style={{
           textAlign: 'center', zIndex: 3,
           width: '100%', padding: '0 4vw',
         }}>
           <p style={{
             fontSize: 'clamp(0.8rem,1.8vw,1.5rem)',
-            color: '#f97316',
-            fontWeight: 700,
+            color: '#f97316', fontWeight: 700,
             letterSpacing: '0.4em',
             textTransform: 'uppercase',
             marginBottom: '3vh',
           }}>
             🎁 Tonight's Prize
           </p>
-
           <div style={{
             background: 'linear-gradient(135deg, #1a0f00, #0f0f1a)',
             border: '2px solid rgba(249,115,22,0.6)',
@@ -1002,7 +1013,7 @@ function PrizeDropDisplay({ prizeName }) {
             padding: 'clamp(2rem,5vw,4rem) clamp(3rem,8vw,7rem)',
             maxWidth: '80vw',
             margin: '0 auto',
-            animation: 'prizeDrop 0.7s cubic-bezier(0.34,1.2,0.64,1), pulseGlow 2s ease-in-out infinite',
+            animation: 'prizeDrop 0.7s cubic-bezier(0.34,1.2,0.64,1), pulseGlow 2s ease-in-out 0.7s infinite',
           }}>
             <p style={{
               fontSize: 'clamp(2.5rem,8vw,7.5rem)',
@@ -1015,7 +1026,6 @@ function PrizeDropDisplay({ prizeName }) {
               {prizeName}
             </p>
           </div>
-
           <p style={{
             marginTop: '3vh',
             fontSize: 'clamp(0.7rem,1.2vw,1rem)',
@@ -1385,10 +1395,14 @@ export default function Display() {
   }
 
   if (currentGame?.type === 'prize_drop') {
-    return <PrizeDropDisplay
-      prizeName={currentGame.prizeName}
-      key={currentGame.startedAt}
-    />
+    return (
+      <PrizeDropDisplay
+        phase={currentGame.phase}
+        prizes={currentGame.prizes ?? []}
+        prizeName={currentGame.prizeName}
+        key={currentGame.dropStartedAt}
+      />
+    )
   }
 
   let screen
