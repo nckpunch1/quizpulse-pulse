@@ -736,6 +736,9 @@ export default function Display() {
   const { teams, state, winnerName, loading, session } = usePulseSession(sessionId)
 
   const audioRef = useRef(null)
+  const chargingAudioRef = useRef(null)
+  const successAudioRef = useRef(null)
+  const flatlineAudioRef = useRef(null)
   const [audioEnabled, setAudioEnabled] = useState(false)
 
   const [rtdbConnected, setRtdbConnected] = useState(true)
@@ -762,18 +765,77 @@ export default function Display() {
     const audio = audioRef.current
     if (!audio || !audioEnabled) return
 
-    if (session?.state === 'active') {
-      audio.currentTime = 0
-      audio.play().catch(console.error)
+    // Play when session is live, stop when released
+    const sessionIsLive = session?.state === 'active'
+      || session?.state === 'game_active'
+      || session?.state === 'pulse_active'
+
+    // Mute background music during Shock The Room
+    const shockActive = shockGame &&
+      shockGame.phase !== null &&
+      shockGame.phase !== 'complete'
+
+    if (sessionIsLive && audioEnabled && !shockActive) {
+      if (audio.paused) {
+        audio.play().catch(console.error)
+      }
     } else {
       audio.pause()
-      audio.currentTime = 0
+      if (!sessionIsLive) audio.currentTime = 0
     }
-  }, [session?.state, audioEnabled])
+  }, [session?.state, audioEnabled, shockGame])
+
+  useEffect(() => {
+    if (!audioEnabled) return
+
+    const charging = chargingAudioRef.current
+    const success = successAudioRef.current
+    const flatline = flatlineAudioRef.current
+    if (!charging || !success || !flatline) return
+
+    const stopAll = () => {
+      charging.pause()
+      charging.currentTime = 0
+      success.pause()
+      success.currentTime = 0
+      flatline.pause()
+      flatline.currentTime = 0
+    }
+
+    if (!shockGame || shockGame.phase === null
+      || shockGame.phase === 'idle') {
+      stopAll()
+      return
+    }
+
+    if (shockGame.phase === 'charging') {
+      stopAll()
+      charging.play().catch(console.error)
+      return
+    }
+
+    if (shockGame.phase === 'shocked') {
+      stopAll()
+      if (shockGame.result === 'pulse') {
+        success.play().catch(console.error)
+      } else if (shockGame.result === 'flatline') {
+        flatline.play().catch(console.error)
+      }
+      return
+    }
+
+    if (shockGame.phase === 'choosing'
+      || shockGame.phase === 'complete') {
+      stopAll()
+    }
+  }, [shockGame?.phase, shockGame?.result, audioEnabled])
 
   const outcomeType = session?.outcomeType ?? session?.gameType ?? null
   const miniGame = session?.currentGame ?? session?.miniGame ?? null
   const currentGame = session?.currentGame
+
+  console.log('session data:', session)
+  console.log('currentGame:', session?.currentGame)
 
   const landingTarget =
     outcomeType === 'blitz' ? 'SUDDEN DEATH BLITZ' :
@@ -809,11 +871,11 @@ export default function Display() {
     )
   }
 
-  if (shockGame && shockGame.phase !== null) {
+  if (shockGame && shockGame.phase !== null && shockGame.phase !== 'idle') {
     return <ShockTheRoomDisplay game={shockGame} />
   }
 
-  if (state === 'game_active' && currentGame?.type === 'closest_answer') {
+  if (currentGame?.type === 'closest_answer' && currentGame?.phase === 'active') {
     return (
       <div style={{
         height: '100vh', background: '#0a0a0f',
@@ -857,7 +919,7 @@ export default function Display() {
     )
   }
 
-  if (state === 'game_active' && currentGame?.type === 'beer_shock') {
+  if (currentGame?.type === 'beer_shock' && currentGame?.phase === 'active') {
     return (
       <div style={{
         height: '100vh',
@@ -937,7 +999,7 @@ export default function Display() {
     )
   }
 
-  if (state === 'game_active' && currentGame?.type === 'prize_drop') {
+  if (currentGame?.type === 'prize_drop' && currentGame?.phase === 'active') {
     return (
       <div style={{
         height: '100vh',
@@ -1095,6 +1157,12 @@ export default function Display() {
         src="/OrangeArenaPulse.mp3"
         preload="auto"
       />
+      <audio ref={chargingAudioRef}
+        src="/Charging.aif" preload="auto" loop />
+      <audio ref={successAudioRef}
+        src="/SuccessShock.aif" preload="auto" />
+      <audio ref={flatlineAudioRef}
+        src="/Flatline.aif" preload="auto" />
     </>
   )
 }
