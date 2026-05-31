@@ -1214,7 +1214,11 @@ export default function Display() {
 
     // Handle both 'prize_drop' and 'prize' type names
     if (type === 'prize_drop' || type === 'prize') {
-      prizes.play().catch(console.error)
+      // Only start if not already playing —
+      // prevents restart on each drop
+      if (prizes.paused) {
+        prizes.play().catch(console.error)
+      }
       return
     }
 
