@@ -1413,7 +1413,7 @@ export default function Display() {
       <audio ref={flatlineAudioRef}
         src="/Flatline.aif" preload="auto" />
       <audio ref={beerAudioRef}
-        src="/Beer.aif" preload="auto" />
+        src="/Beer.mp3" preload="auto" />
       <audio ref={prizesAudioRef}
         src="/prizes.mp3" preload="auto" />
     </>
