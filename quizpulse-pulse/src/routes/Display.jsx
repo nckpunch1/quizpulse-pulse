@@ -729,6 +729,307 @@ function ShockTheRoomDisplay({ game }) {
   )
 }
 
+// ─── Prize Drop display ───────────────────────────────────────────────────────
+
+function PrizeDropDisplay({ prizeName }) {
+  const [phase, setPhase] = useState('intro')
+  // intro → spinning → revealing → revealed
+
+  useEffect(() => {
+    const t1 = setTimeout(() => setPhase('spinning'), 500)
+    const t2 = setTimeout(() => setPhase('revealing'), 3500)
+    const t3 = setTimeout(() => setPhase('revealed'), 4200)
+    return () => {
+      clearTimeout(t1)
+      clearTimeout(t2)
+      clearTimeout(t3)
+    }
+  }, [])
+
+  const fakeSlots = ['🎁', '⚡', '🏆', '🎯', '💥',
+    '🎁', '⚡', '🏆', '🎯', '💥']
+
+  return (
+    <div style={{
+      height: '100vh',
+      background: '#0a0a0f',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontFamily: "'Barlow Condensed', sans-serif",
+      overflow: 'hidden',
+      position: 'relative',
+    }}>
+      <style>{`
+        @keyframes scanline {
+          0% { transform: translateY(-100%); }
+          100% { transform: translateY(100vh); }
+        }
+        @keyframes prizeIntro {
+          0% { opacity: 0; transform: translateY(-40px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes slotSpin {
+          0% { transform: translateY(0); }
+          100% { transform: translateY(-1000px); }
+        }
+        @keyframes slotSlowSpin {
+          0% { transform: translateY(0); }
+          100% { transform: translateY(-400px); }
+        }
+        @keyframes prizeDrop {
+          0% {
+            transform: translateY(-120vh) rotate(-3deg) scale(1.3);
+            opacity: 0;
+          }
+          60% {
+            transform: translateY(18px) rotate(1deg) scale(0.97);
+            opacity: 1;
+          }
+          75% {
+            transform: translateY(-8px) rotate(-0.5deg) scale(1.01);
+          }
+          90% { transform: translateY(4px) rotate(0); }
+          100% { transform: translateY(0) rotate(0) scale(1); }
+        }
+        @keyframes pulseGlow {
+          0%, 100% {
+            box-shadow: 0 0 30px rgba(249,115,22,0.4),
+                        0 0 60px rgba(249,115,22,0.1);
+          }
+          50% {
+            box-shadow: 0 0 60px rgba(249,115,22,0.8),
+                        0 0 120px rgba(249,115,22,0.3),
+                        0 0 200px rgba(249,115,22,0.1);
+          }
+        }
+        @keyframes electricFlicker {
+          0%, 100% { opacity: 1; }
+          92% { opacity: 1; }
+          93% { opacity: 0.3; }
+          94% { opacity: 1; }
+          97% { opacity: 0.5; }
+          98% { opacity: 1; }
+        }
+        @keyframes particleFloat {
+          0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+          100% { transform: translateY(-200px) rotate(720deg); opacity: 0; }
+        }
+        @keyframes screenFlash {
+          0%, 100% { opacity: 0; }
+          50% { opacity: 0.15; }
+        }
+      `}</style>
+
+      {/* Scanline effect */}
+      <div style={{
+        position: 'absolute', inset: 0,
+        background: 'linear-gradient(transparent 50%, rgba(0,0,0,0.03) 50%)',
+        backgroundSize: '100% 4px',
+        pointerEvents: 'none', zIndex: 1,
+      }} />
+
+      {/* Screen flash on reveal */}
+      {phase === 'revealing' && (
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: '#f97316',
+          animation: 'screenFlash 0.4s ease',
+          zIndex: 2, pointerEvents: 'none',
+        }} />
+      )}
+
+      {/* Floating particles when revealed */}
+      {phase === 'revealed' && (
+        ['✨','⭐','💥','✨','⭐','💫','✨','⭐'].map((s, i) => (
+          <div key={i} style={{
+            position: 'absolute',
+            fontSize: 'clamp(1rem,2.5vw,2rem)',
+            left: `${8 + i * 12}%`,
+            bottom: `${20 + (i % 3) * 15}%`,
+            animation: `particleFloat ${1.5 + i * 0.2}s ease-out forwards`,
+            animationDelay: `${i * 0.1}s`,
+            zIndex: 2,
+          }}>{s}</div>
+        ))
+      )}
+
+      {/* INTRO PHASE */}
+      {phase === 'intro' && (
+        <div style={{
+          textAlign: 'center',
+          animation: 'prizeIntro 0.4s ease',
+          zIndex: 3,
+        }}>
+          <p style={{
+            fontSize: 'clamp(1rem,3vw,2.5rem)',
+            color: '#f97316',
+            fontWeight: 700,
+            letterSpacing: '0.4em',
+            textTransform: 'uppercase',
+            marginBottom: '3vh',
+          }}>
+            ⚡ Prize Drop
+          </p>
+          <p style={{
+            fontSize: 'clamp(2rem,7vw,6rem)',
+            fontWeight: 900,
+            color: 'rgba(255,255,255,0.15)',
+            letterSpacing: '0.1em',
+          }}>
+            LOADING...
+          </p>
+        </div>
+      )}
+
+      {/* SPINNING PHASE — slot machine */}
+      {(phase === 'spinning' || phase === 'revealing') && (
+        <div style={{
+          textAlign: 'center', zIndex: 3,
+          width: '100%',
+        }}>
+          <p style={{
+            fontSize: 'clamp(0.8rem,1.8vw,1.5rem)',
+            color: '#f97316',
+            fontWeight: 700,
+            letterSpacing: '0.4em',
+            textTransform: 'uppercase',
+            marginBottom: '4vh',
+            animation: 'electricFlicker 2s infinite',
+          }}>
+            ⚡ Prize Drop
+          </p>
+
+          {/* Slot window */}
+          <div style={{
+            position: 'relative',
+            width: 'clamp(280px,60vw,700px)',
+            height: 'clamp(100px,18vh,180px)',
+            margin: '0 auto',
+            overflow: 'hidden',
+            border: '2px solid rgba(249,115,22,0.5)',
+            borderRadius: 16,
+            background: '#111',
+            boxShadow: '0 0 40px rgba(249,115,22,0.2)',
+          }}>
+            {/* Top fade */}
+            <div style={{
+              position: 'absolute', top: 0, left: 0,
+              right: 0, height: '30%', zIndex: 2,
+              background: 'linear-gradient(#111, transparent)',
+            }} />
+            {/* Bottom fade */}
+            <div style={{
+              position: 'absolute', bottom: 0, left: 0,
+              right: 0, height: '30%', zIndex: 2,
+              background: 'linear-gradient(transparent, #111)',
+            }} />
+            {/* Center highlight line */}
+            <div style={{
+              position: 'absolute', top: '50%',
+              left: 0, right: 0, height: 2,
+              background: 'rgba(249,115,22,0.6)',
+              transform: 'translateY(-50%)', zIndex: 3,
+              boxShadow: '0 0 10px rgba(249,115,22,0.8)',
+            }} />
+
+            {/* Spinning tiles */}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              animation: phase === 'spinning'
+                ? 'slotSpin 0.3s linear infinite'
+                : 'slotSlowSpin 0.8s ease-out forwards',
+            }}>
+              {[...fakeSlots, ...fakeSlots, prizeName].map(
+                (item, i) => (
+                  <div key={i} style={{
+                    height: 'clamp(100px,18vh,180px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 'clamp(1.5rem,4vw,3.5rem)',
+                    fontWeight: 900,
+                    color: item === prizeName
+                      ? '#f97316' : 'rgba(255,255,255,0.4)',
+                    letterSpacing: '0.05em',
+                    flexShrink: 0,
+                    width: '100%',
+                    textAlign: 'center',
+                    padding: '0 1rem',
+                  }}>
+                    {item}
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+
+          <p style={{
+            marginTop: '3vh',
+            fontSize: 'clamp(0.7rem,1.2vw,1rem)',
+            color: 'rgba(255,255,255,0.2)',
+            letterSpacing: '0.2em',
+          }}>
+            SELECTING PRIZE...
+          </p>
+        </div>
+      )}
+
+      {/* REVEALED PHASE */}
+      {phase === 'revealed' && (
+        <div style={{
+          textAlign: 'center', zIndex: 3,
+          width: '100%', padding: '0 4vw',
+        }}>
+          <p style={{
+            fontSize: 'clamp(0.8rem,1.8vw,1.5rem)',
+            color: '#f97316',
+            fontWeight: 700,
+            letterSpacing: '0.4em',
+            textTransform: 'uppercase',
+            marginBottom: '3vh',
+          }}>
+            🎁 Tonight's Prize
+          </p>
+
+          <div style={{
+            background: 'linear-gradient(135deg, #1a0f00, #0f0f1a)',
+            border: '2px solid rgba(249,115,22,0.6)',
+            borderRadius: 20,
+            padding: 'clamp(2rem,5vw,4rem) clamp(3rem,8vw,7rem)',
+            maxWidth: '80vw',
+            margin: '0 auto',
+            animation: 'prizeDrop 0.7s cubic-bezier(0.34,1.2,0.64,1), pulseGlow 2s ease-in-out infinite',
+          }}>
+            <p style={{
+              fontSize: 'clamp(2.5rem,8vw,7.5rem)',
+              fontWeight: 900,
+              color: '#ffffff',
+              lineHeight: 1.1,
+              margin: 0,
+              textShadow: '0 0 40px rgba(249,115,22,0.4)',
+            }}>
+              {prizeName}
+            </p>
+          </div>
+
+          <p style={{
+            marginTop: '3vh',
+            fontSize: 'clamp(0.7rem,1.2vw,1rem)',
+            color: 'rgba(255,255,255,0.25)',
+            letterSpacing: '0.2em',
+          }}>
+            Speak to your host to claim
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Display() {
@@ -999,91 +1300,11 @@ export default function Display() {
     )
   }
 
-  if (currentGame?.type === 'prize_drop' && currentGame?.phase === 'active') {
-    return (
-      <div style={{
-        height: '100vh',
-        background: '#0a0a0f',
-        display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        fontFamily: "'Barlow Condensed', sans-serif",
-        overflow: 'hidden',
-      }}>
-        <style>{`
-          @keyframes dropIn {
-            0% { transform: translateY(-100vh) rotate(-3deg); opacity: 0; }
-            70% { transform: translateY(10px) rotate(1deg); opacity: 1; }
-            85% { transform: translateY(-5px) rotate(-0.5deg); }
-            100% { transform: translateY(0) rotate(0); opacity: 1; }
-          }
-          @keyframes shimmer {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
-          }
-          @keyframes sparkle {
-            0%, 100% { transform: scale(1) rotate(0deg); opacity: 1; }
-            50% { transform: scale(1.3) rotate(180deg); opacity: 0.8; }
-          }
-        `}</style>
-
-        {['✨','⭐','✨','🌟','✨'].map((s, i) => (
-          <div key={i} style={{
-            position: 'absolute',
-            fontSize: 'clamp(1rem,3vw,2.5rem)',
-            left: `${10 + i * 20}%`,
-            top: `${20 + (i % 3) * 20}%`,
-            animation: `sparkle ${1 + i * 0.3}s ease-in-out infinite`,
-            animationDelay: `${i * 0.2}s`,
-          }}>{s}</div>
-        ))}
-
-        <p style={{
-          fontSize: 'clamp(1rem,2vw,1.8rem)',
-          color: '#f97316', fontWeight: 700,
-          letterSpacing: '0.3em', textTransform: 'uppercase',
-          marginBottom: '4vh',
-        }}>
-          🎁 Prize Drop
-        </p>
-
-        <div style={{
-          background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-          border: '2px solid rgba(249,115,22,0.5)',
-          borderRadius: 20,
-          padding: 'clamp(2rem,5vw,4rem) clamp(3rem,8vw,7rem)',
-          textAlign: 'center',
-          boxShadow: '0 0 60px rgba(249,115,22,0.2)',
-          animation: 'dropIn 0.8s cubic-bezier(0.34,1.2,0.64,1)',
-          position: 'relative', zIndex: 1,
-          maxWidth: '80vw',
-        }}>
-          <p style={{
-            fontSize: 'clamp(0.8rem,1.5vw,1.2rem)',
-            color: 'rgba(255,255,255,0.4)',
-            letterSpacing: '0.2em', marginBottom: '1rem',
-            textTransform: 'uppercase',
-          }}>
-            Tonight's prize
-          </p>
-          <p style={{
-            fontSize: 'clamp(2rem,6vw,5.5rem)',
-            fontWeight: 900, color: '#ffffff',
-            margin: 0, lineHeight: 1.1,
-            animation: 'shimmer 2s ease-in-out infinite',
-          }}>
-            {currentGame.prizeName}
-          </p>
-        </div>
-
-        <p style={{
-          marginTop: '4vh',
-          fontSize: 'clamp(0.8rem,1.5vw,1.2rem)',
-          color: 'rgba(255,255,255,0.25)',
-        }}>
-          Speak to your host to claim
-        </p>
-      </div>
-    )
+  if (currentGame?.type === 'prize_drop') {
+    return <PrizeDropDisplay
+      prizeName={currentGame.prizeName}
+      key={currentGame.startedAt}
+    />
   }
 
   let screen
