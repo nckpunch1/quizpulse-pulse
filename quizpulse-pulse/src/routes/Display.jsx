@@ -1048,12 +1048,12 @@ export default function Display() {
   const [shockGame, setShockGame] = useState(null)
 
   useEffect(() => {
-    chargingAudioRef.current = new Audio('/Charging.aif')
+    chargingAudioRef.current = new Audio('/Charging.mp3')
     chargingAudioRef.current.loop = true
 
-    successAudioRef.current = new Audio('/SuccessShock.aif')
+    successAudioRef.current = new Audio('/SuccessShock.mp3')
 
-    flatlineAudioRef.current = new Audio('/Flatline.aif')
+    flatlineAudioRef.current = new Audio('/Flatline.mp3')
 
     beerAudioRef.current = new Audio('/Beer.mp3')
 
@@ -1117,7 +1117,11 @@ export default function Display() {
     const muteBackground =
       (shockGame && shockGame.phase !== null && shockGame.phase !== 'complete') ||
       currentGame?.type === 'beer_shock' ||
-      currentGame?.type === 'prize_drop'
+      currentGame?.type === 'beer' ||
+      session?.miniGame?.type === 'beer' ||
+      currentGame?.type === 'prize_drop' ||
+      currentGame?.type === 'prize' ||
+      session?.miniGame?.type === 'prize'
 
     if (sessionIsLive && audioEnabled && !muteBackground) {
       if (audio.paused) {
@@ -1181,24 +1185,36 @@ export default function Display() {
     const prizes = prizesAudioRef.current
     if (!beer || !prizes) return
 
+    // Check both RTDB paths — new game launcher
+    // uses currentGame, old system uses miniGame
     const type = currentGame?.type
-    const phase = currentGame?.phase
+      ?? session?.miniGame?.type
 
+    // Stop both first
     beer.pause()
     beer.currentTime = 0
     prizes.pause()
     prizes.currentTime = 0
 
-    if (type === 'beer_shock' && phase === 'active') {
+    // Handle both 'beer_shock' and 'beer' type names
+    if (type === 'beer_shock' || type === 'beer') {
       beer.play().catch(console.error)
       return
     }
 
-    if (type === 'prize_drop' && phase === 'active') {
+    // Handle both 'prize_drop' and 'prize' type names
+    if (type === 'prize_drop' || type === 'prize') {
       prizes.play().catch(console.error)
       return
     }
-  }, [currentGame?.type, currentGame?.phase, currentGame?.startedAt, audioEnabled])
+
+  }, [
+    currentGame?.type,
+    currentGame?.phase,
+    currentGame?.startedAt,
+    session?.miniGame?.type,
+    audioEnabled,
+  ])
 
   const outcomeType = session?.outcomeType ?? session?.gameType ?? null
   const miniGame = session?.currentGame ?? session?.miniGame ?? null
@@ -1392,7 +1408,7 @@ export default function Display() {
     <>
       {!audioEnabled && (
         <div
-          onClick={() => {
+          onClick={async () => {
             const allRefs = [
               audioRef,
               chargingAudioRef,
@@ -1401,15 +1417,15 @@ export default function Display() {
               beerAudioRef,
               prizesAudioRef,
             ]
-            allRefs.forEach(ref => {
-              if (!ref.current) return
-              ref.current.play()
+            await Promise.all(allRefs.map(ref => {
+              if (!ref.current) return Promise.resolve()
+              return ref.current.play()
                 .then(() => {
                   ref.current.pause()
                   ref.current.currentTime = 0
                 })
                 .catch(() => {})
-            })
+            }))
             setAudioEnabled(true)
           }}
           style={{
