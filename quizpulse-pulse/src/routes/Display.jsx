@@ -1064,6 +1064,8 @@ export default function Display() {
     return () => unsubShock()
   }, [sessionId])
 
+  const currentGame = session?.currentGame
+
   useEffect(() => {
     const audio = audioRef.current
     if (!audio || !audioEnabled) return
@@ -1161,7 +1163,6 @@ export default function Display() {
 
   const outcomeType = session?.outcomeType ?? session?.gameType ?? null
   const miniGame = session?.currentGame ?? session?.miniGame ?? null
-  const currentGame = session?.currentGame
 
   console.log('session data:', session)
   console.log('currentGame:', session?.currentGame)
