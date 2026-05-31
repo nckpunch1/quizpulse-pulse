@@ -1048,6 +1048,45 @@ export default function Display() {
   const [shockGame, setShockGame] = useState(null)
 
   useEffect(() => {
+    chargingAudioRef.current = new Audio('/Charging.aif')
+    chargingAudioRef.current.loop = true
+
+    successAudioRef.current = new Audio('/SuccessShock.aif')
+
+    flatlineAudioRef.current = new Audio('/Flatline.aif')
+
+    beerAudioRef.current = new Audio('/Beer.mp3')
+
+    prizesAudioRef.current = new Audio('/prizes.mp3')
+
+    // Preload all
+    ;[
+      chargingAudioRef,
+      successAudioRef,
+      flatlineAudioRef,
+      beerAudioRef,
+      prizesAudioRef,
+    ].forEach(ref => {
+      ref.current.preload = 'auto'
+      ref.current.load()
+    })
+
+    return () => {
+      ;[
+        chargingAudioRef,
+        successAudioRef,
+        flatlineAudioRef,
+        beerAudioRef,
+        prizesAudioRef,
+      ].forEach(ref => {
+        if (!ref.current) return
+        ref.current.pause()
+        ref.current.src = ''
+      })
+    }
+  }, [])
+
+  useEffect(() => {
     const connRef = rtdbRef(db, '.info/connected')
     const unsub = onValue(connRef, (snap) => {
       setRtdbConnected(snap.val() === true)
@@ -1353,7 +1392,26 @@ export default function Display() {
     <>
       {!audioEnabled && (
         <div
-          onClick={() => setAudioEnabled(true)}
+          onClick={() => {
+            const allRefs = [
+              audioRef,
+              chargingAudioRef,
+              successAudioRef,
+              flatlineAudioRef,
+              beerAudioRef,
+              prizesAudioRef,
+            ]
+            allRefs.forEach(ref => {
+              if (!ref.current) return
+              ref.current.play()
+                .then(() => {
+                  ref.current.pause()
+                  ref.current.currentTime = 0
+                })
+                .catch(() => {})
+            })
+            setAudioEnabled(true)
+          }}
           style={{
             position: 'fixed', inset: 0, zIndex: 9999,
             background: 'rgba(0,0,0,0.85)',
@@ -1407,16 +1465,7 @@ export default function Display() {
         src="/OrangeArenaPulse.mp3"
         preload="auto"
       />
-      <audio ref={chargingAudioRef}
-        src="/Charging.aif" preload="auto" loop />
-      <audio ref={successAudioRef}
-        src="/SuccessShock.aif" preload="auto" />
-      <audio ref={flatlineAudioRef}
-        src="/Flatline.aif" preload="auto" />
-      <audio ref={beerAudioRef}
-        src="/Beer.mp3" preload="auto" />
-      <audio ref={prizesAudioRef}
-        src="/prizes.mp3" preload="auto" />
+
     </>
   )
 }
