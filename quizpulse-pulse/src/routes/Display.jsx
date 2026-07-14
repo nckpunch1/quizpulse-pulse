@@ -1044,7 +1044,7 @@ function PrizeDropDisplay({ phase, prizes, prizeName }) {
 
 export default function Display() {
   const { id: sessionId } = useParams()
-  const { teams, state, winnerName, loading, session } = usePulseSession(sessionId)
+  const { teams, state, winnerName, loading, session, error } = usePulseSession(sessionId)
 
   const audioRef = useRef(null)
   const chargingAudioRef = useRef(null)
@@ -1266,6 +1266,29 @@ export default function Display() {
           width: 12, height: 12, borderRadius: '50%', background: '#2a2a2a',
           animation: 'pulse-ring 1.5s ease-in-out infinite',
         }} />
+      </div>
+    )
+  }
+
+  // Subscription failure (bad rules, revoked access) — distinct from a network
+  // blip, which the "Reconnecting" overlay below covers. Big and legible so
+  // the host can read it from across the room instead of facing a dead screen.
+  if (error) {
+    return (
+      <div style={{ ...font, height: '100vh', background: '#0a0a0a',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', gap: '2vh' }}>
+        <p style={{ color: '#f97316', fontSize: '4rem', margin: 0 }}>⚠</p>
+        <p style={{ color: '#f97316', fontWeight: 800,
+          fontSize: 'clamp(1.5rem, 3vw, 3rem)',
+          letterSpacing: '0.15em', textTransform: 'uppercase', margin: 0 }}>
+          Display connection error
+        </p>
+        <p style={{ color: '#555', fontSize: 'clamp(0.9rem, 1.2vw, 1.2rem)',
+          fontFamily: 'monospace', textAlign: 'center',
+          padding: '0 2rem', margin: 0 }}>
+          {error}
+        </p>
       </div>
     )
   }

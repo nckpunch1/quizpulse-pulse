@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { usePulseSession } from '@/hooks/usePulseSession'
 
@@ -133,6 +133,7 @@ function Logo() {
 const GAME_LABELS = {
   blitz: 'BLITZ',
   closest: 'CLOSEST ANSWER',
+  closest_answer: 'CLOSEST ANSWER',
   beer: 'BEER & KNOWLEDGE',
   'single-team': 'SINGLE TEAM CHALLENGE',
 }
@@ -234,15 +235,16 @@ function WaitingScreen() {
 
 // ─── Prize draw active — tap button ──────────────────────────────────────────
 
-function DrawActiveScreen({ onTap }) {
+// Pure theater: the tap is local-only feedback (nothing is submitted anywhere)
+// while the host hypes the room. The draw itself happens in admin-host.
+function DrawActiveScreen() {
   const [tapped, setTapped] = useState(false)
 
   const handleTap = useCallback(() => {
     if (tapped) return
     setTapped(true)
-    onTap()
     if ('vibrate' in navigator) navigator.vibrate(18)
-  }, [tapped, onTap])
+  }, [tapped])
 
   if (tapped) {
     return (
@@ -370,123 +372,6 @@ function WatchingScreen({ teamName, mode }) {
         <p style={{ color: '#7a4a20', fontSize: '1rem', letterSpacing: '0.12em', textTransform: 'uppercase', maxWidth: 240, lineHeight: 1.5 }}>
           Watch the big screen
         </p>
-      </div>
-    </Screen>
-  )
-}
-
-// ─── Closest Answer input screen ──────────────────────────────────────────────
-
-function ClosestAnswerScreen({ miniGame, teamId, teamName, existingSubmission, onSubmit }) {
-  const [value, setValue] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-
-  const handleSubmit = useCallback(async () => {
-    const num = parseFloat(value)
-    if (isNaN(num) || submitting) return
-    setSubmitting(true)
-    await onSubmit(teamId, num, teamName)
-  }, [value, teamId, teamName, submitting, onSubmit])
-
-  if (existingSubmission != null) {
-    return (
-      <Screen>
-        <Logo />
-        <span className="slam-in" style={{ color: '#f97316', fontSize: '4rem', lineHeight: 1 }}>✓</span>
-        <h2
-          style={{
-            color: '#fff',
-            fontFamily: "'Barlow Condensed', sans-serif",
-            fontWeight: 900,
-            fontSize: '2rem',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            textAlign: 'center',
-            marginTop: '1rem',
-          }}
-        >
-          Answer locked in
-        </h2>
-        <p style={{ color: '#7a4a20', fontSize: '1.1rem', marginTop: '0.5rem', letterSpacing: '0.05em' }}>
-          Your answer: <strong style={{ color: '#f97316' }}>{existingSubmission}</strong>
-        </p>
-        <p style={{ color: '#555', fontSize: '0.9rem', marginTop: '0.5rem', letterSpacing: '0.1em' }}>
-          Watch the big screen
-        </p>
-      </Screen>
-    )
-  }
-
-  return (
-    <Screen>
-      <Logo />
-      <div style={{ width: '100%', maxWidth: 340, display: 'flex', flexDirection: 'column', gap: '1.5rem', alignItems: 'center' }}>
-        <div style={{ textAlign: 'center' }}>
-          <p style={{ color: '#f97316', fontWeight: 700, fontSize: '0.85rem', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: '0.75rem' }}>
-            CLOSEST ANSWER
-          </p>
-          <h2 style={{
-            color: '#fff',
-            fontFamily: "'Barlow Condensed', sans-serif",
-            fontWeight: 900,
-            fontSize: 'clamp(1.4rem, 5vw, 2rem)',
-            lineHeight: 1.2,
-            letterSpacing: '0.02em',
-          }}>
-            {miniGame.questionText}
-          </h2>
-        </div>
-
-        <input
-          type="number"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          value={value}
-          onChange={e => setValue(e.target.value)}
-          placeholder="Your number…"
-          style={{
-            width: '100%', boxSizing: 'border-box',
-            background: 'rgba(255,255,255,0.06)',
-            border: '2px solid rgba(249,115,22,0.4)',
-            borderRadius: '1rem',
-            color: '#fff',
-            fontFamily: "'Barlow Condensed', sans-serif",
-            fontWeight: 700,
-            fontSize: '2.5rem',
-            textAlign: 'center',
-            padding: '1rem',
-            outline: 'none',
-            WebkitAppearance: 'none',
-            MozAppearance: 'textfield',
-          }}
-          onFocus={e => e.target.style.borderColor = '#f97316'}
-          onBlur={e => e.target.style.borderColor = 'rgba(249,115,22,0.4)'}
-        />
-
-        <button
-          onClick={handleSubmit}
-          disabled={!value.trim() || isNaN(parseFloat(value)) || submitting}
-          style={{
-            width: '100%',
-            fontFamily: "'Barlow Condensed', sans-serif",
-            fontWeight: 900,
-            fontSize: '1.6rem',
-            letterSpacing: '0.05em',
-            textTransform: 'uppercase',
-            color: '#fff',
-            background: '#f97316',
-            border: 'none',
-            borderRadius: '1rem',
-            padding: '1.1rem',
-            cursor: (!value.trim() || isNaN(parseFloat(value)) || submitting) ? 'not-allowed' : 'pointer',
-            opacity: (!value.trim() || isNaN(parseFloat(value)) || submitting) ? 0.4 : 1,
-            WebkitTapHighlightColor: 'transparent',
-            boxShadow: '0 0 20px rgba(249,115,22,0.3)',
-            transition: 'opacity 0.15s',
-          }}
-        >
-          {submitting ? 'Locking in…' : 'Submit'}
-        </button>
       </div>
     </Screen>
   )
@@ -627,32 +512,19 @@ function RevealedScreen({ winnerName, mode }) {
 
 export default function Play() {
   const { id: sessionId } = useParams()
-  const { teams, state, mode, gameType, miniGame, winnerId, winnerName, loading, submitAnswer } = usePulseSession(sessionId)
+  const { teams, state, mode, gameType, winnerName, loading, error, connected } = usePulseSession(sessionId)
 
   const [selectedTeamId, setSelectedTeamId] = useState(() =>
     sessionId ? localStorage.getItem(TEAM_KEY(sessionId)) : null
   )
-  const [tapCount, setTapCount] = useState(0)
-
-  const prevStateRef = useRef(null)
-  useEffect(() => {
-    if (state === 'active' && prevStateRef.current !== 'active') setTapCount(0)
-    prevStateRef.current = state
-  }, [state])
 
   const selectTeam = useCallback((teamId) => {
     if (sessionId) localStorage.setItem(TEAM_KEY(sessionId), teamId)
     setSelectedTeamId(teamId)
   }, [sessionId])
 
-  const handleTap = useCallback(() => setTapCount(c => c + 1), [])
-
   const selectedTeam = teams.find(t => t.id === selectedTeamId) ?? null
   const isMiniGame = mode && mode !== 'draw'
-  const existingSubmission =
-    miniGame?.submissions?.[selectedTeamId] ??
-    miniGame?.answers?.[selectedTeamId]?.answer ??
-    null
 
   let content
 
@@ -667,6 +539,19 @@ export default function Play() {
       <div style={{ height: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: BG }}>
         <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#7a4a20' }} />
       </div>
+    )
+  } else if (error) {
+    content = (
+      <Screen>
+        <Logo />
+        <p style={{ color: '#f97316', fontSize: '2.5rem', margin: 0 }}>⚠</p>
+        <p style={{ color: '#fff', textAlign: 'center', fontSize: '1.25rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          Connection problem
+        </p>
+        <p style={{ color: '#7a4a20', textAlign: 'center', fontSize: '0.95rem', maxWidth: 280 }}>
+          Couldn't load the game — check your signal, or ask the host.
+        </p>
+      </Screen>
     )
   } else if (!state) {
     content = (
@@ -688,35 +573,15 @@ export default function Play() {
   } else if (state === 'setup') {
     content = <WaitingScreen />
   } else if (state === 'active') {
-    if (mode === 'closest') {
-      content = (
-        <ClosestAnswerScreen
-          miniGame={miniGame}
-          teamId={selectedTeamId}
-          teamName={selectedTeam.name}
-          existingSubmission={existingSubmission}
-          onSubmit={submitAnswer}
-        />
-      )
-    } else if (isMiniGame) {
+    // Mini games (including closest answer) are played on paper and watched
+    // on the big screen; only the prize draw has an interactive tap button.
+    if (isMiniGame) {
       content = <WatchingScreen teamName={selectedTeam.name} mode={mode} />
     } else {
-      content = <DrawActiveScreen onTap={handleTap} />
+      content = <DrawActiveScreen />
     }
   } else if (state === 'game_active') {
-    if (gameType === 'closest_answer') {
-      content = (
-        <ClosestAnswerScreen
-          miniGame={miniGame}
-          teamId={selectedTeamId}
-          teamName={selectedTeam.name}
-          existingSubmission={existingSubmission}
-          onSubmit={submitAnswer}
-        />
-      )
-    } else {
-      content = <WatchingScreen teamName={selectedTeam.name} mode={gameType} />
-    }
+    content = <WatchingScreen teamName={selectedTeam.name} mode={gameType} />
   } else if (state === 'revealing') {
     content = <RevealingScreen mode={mode} />
   } else if (state === 'revealed') {
@@ -729,6 +594,22 @@ export default function Play() {
     <>
       <style>{STYLES}</style>
       {content}
+      {!connected && !loading && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
+          background: 'rgba(249,115,22,0.95)',
+          padding: '0.6rem 1rem',
+          textAlign: 'center',
+          fontFamily: "'Barlow Condensed', sans-serif",
+          fontWeight: 800,
+          fontSize: '0.95rem',
+          letterSpacing: '0.15em',
+          textTransform: 'uppercase',
+          color: '#000',
+        }}>
+          Connection lost — reconnecting…
+        </div>
+      )}
     </>
   )
 }

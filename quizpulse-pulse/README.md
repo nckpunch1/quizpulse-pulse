@@ -1,16 +1,33 @@
-# React + Vite
+# QuizPulse Pulse — display app
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Read-only display surface for the pulse mini-games at QuizPulse trivia nights.
+Sessions are created and driven from the **admin-host** Host Console, which
+writes to the RTDB and links here with a session ID. This app subscribes and
+renders; it makes no writes.
 
-Currently, two official plugins are available:
+## Routes
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+| Route | Surface |
+| --- | --- |
+| `/display/:id` | Venue projector (fullscreen, HDMI) |
+| `/play/:id` | Player phones (tap theater, no submission) |
+| `/leaderboard/:id` | Leaderboard projection |
 
-## React Compiler
+## Develop
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```
+npm install
+npm run dev
+```
 
-## Expanding the ESLint configuration
+Requires the `VITE_FIREBASE_*` env vars in `.env.local` (see `src/lib/firebase.js`).
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Follow-ups
+
+- **pulseSessions cleanup** — nothing ever deletes `pulseSessions`, so every
+  trivia night appends forever. Belongs in **admin-host** (this app has no
+  writes): a scheduled job or a manual admin action pruning sessions older
+  than ~30 days.
+- **Display.jsx decomposition** — ~1,500 lines mixing animation CSS, audio
+  management, and six game renderers in one file. Split when next touched;
+  deliberately not mixed into the write-path-removal commit.
