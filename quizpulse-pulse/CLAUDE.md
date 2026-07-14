@@ -2,7 +2,7 @@
 
 ## What this app is
 
-A real-time **display surface** for the mini-games that run alongside QuizPulse trivia nights. It is **read-only**: every session is created and driven from the admin-host repo's Host Console (`LiveGameController` → `pulseService`), which writes to this app's RTDB and links here with an explicit session ID. This app subscribes and renders — it never writes. Two audience surfaces: Player screen (phones, pure theater — taps are local-only) and Display screen (venue projector via HDMI), plus a leaderboard display.
+A real-time **display surface** for the mini-games that run alongside QuizPulse trivia nights. It is **read-only**: every session is created and driven from the admin-host repo's Host Console (`LiveGameController` → `pulseService`), which writes to this app's RTDB and links here with an explicit session ID. This app subscribes and renders — it never writes. Two audience surfaces: Player screen (phones, pure theater — taps are local-only) and Display screen (venue projector via HDMI).
 
 ## Stack
 
@@ -14,7 +14,6 @@ A real-time **display surface** for the mini-games that run alongside QuizPulse 
 
 - `src/routes/Play.jsx` — player screen (no auth, phone-optimised; tap button is local theater, nothing is submitted)
 - `src/routes/Display.jsx` — fullscreen venue presentation screen
-- `src/pages/LeaderboardDisplay.jsx` — leaderboard projection
 - `src/hooks/usePulseSession.js` — all Firebase subscriptions
 - `src/lib/firebase.js` — Firebase config (reads from env vars)
 
@@ -23,7 +22,7 @@ A real-time **display surface** for the mini-games that run alongside QuizPulse 
 - `/` → landing note (this app has no admin; open screens from the Host Console)
 - `/play/:id` → player screen
 - `/display/:id` → venue display screen
-- `/leaderboard/:id` → leaderboard display
+- `/leaderboard/:id` → redirect to the canonical leaderboard at `admin.pulseiq.com.au/leaderboard/:id` (this repo's copy drifted and was deleted; the route survives for old bookmarks)
 
 ## Data model (Firebase Realtime Database)
 

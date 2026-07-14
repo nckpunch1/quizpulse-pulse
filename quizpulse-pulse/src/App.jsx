@@ -1,7 +1,7 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { useEffect } from 'react'
+import { BrowserRouter, Routes, Route, useParams } from 'react-router-dom'
 import Play from './routes/Play'
 import Display from './routes/Display'
-import LeaderboardDisplay from './pages/LeaderboardDisplay'
 
 // This app is display-only: sessions are created and driven from admin-host's
 // Host Console, which links here with an explicit session ID. There is no
@@ -23,6 +23,20 @@ function Home() {
   )
 }
 
+// The canonical leaderboard display lives in admin-host; this repo's copy
+// drifted badly and was deleted. Old bookmarks on this domain get forwarded.
+const LeaderboardRedirect = () => {
+  const { id } = useParams()
+  useEffect(() => {
+    window.location.replace(`https://admin.pulseiq.com.au/leaderboard/${id}`)
+  }, [id])
+  return (
+    <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', color: '#fff', background: '#0b0e14' }}>
+      Redirecting to leaderboard…
+    </div>
+  )
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -30,7 +44,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/play/:id" element={<Play />} />
         <Route path="/display/:id" element={<Display />} />
-        <Route path="/leaderboard/:id" element={<LeaderboardDisplay />} />
+        <Route path="/leaderboard/:id" element={<LeaderboardRedirect />} />
       </Routes>
     </BrowserRouter>
   )

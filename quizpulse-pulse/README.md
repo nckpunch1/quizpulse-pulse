@@ -11,7 +11,7 @@ renders; it makes no writes.
 | --- | --- |
 | `/display/:id` | Venue projector (fullscreen, HDMI) |
 | `/play/:id` | Player phones (tap theater, no submission) |
-| `/leaderboard/:id` | Leaderboard projection |
+| `/leaderboard/:id` | Redirects to the canonical leaderboard on admin-host |
 
 ## Develop
 

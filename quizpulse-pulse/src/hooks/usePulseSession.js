@@ -2,7 +2,7 @@
  * usePulseSession
  *
  * Central hook for all Firebase Realtime Database interactions.
- * All screens (Play, Display, Leaderboard) use this hook.
+ * Both screens (Play, Display) use this hook.
  * No component should read Firebase directly.
  *
  * READ-ONLY BY DESIGN. This app is a display surface: every pulse game is
@@ -82,21 +82,4 @@ export function usePulseSession(sessionId) {
     winnerName: session?.winnerName ?? null,
     winnerId: session?.winnerId ?? null,
   }
-}
-
-export function useLeaderboardDisplay(sessionId) {
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    if (!sessionId) return
-    const unsub = onValue(
-      ref(db, `leaderboardDisplay/${sessionId}`),
-      (snap) => { setData(snap.val()); setLoading(false) },
-      () => setLoading(false)
-    )
-    return () => unsub()
-  }, [sessionId])
-
-  return { data, loading }
 }
