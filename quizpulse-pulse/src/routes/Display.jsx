@@ -1040,6 +1040,135 @@ function PrizeDropDisplay({ phase, prizes, prizeName }) {
   )
 }
 
+// ─── Crocodile Theatre display ────────────────────────────────────────────────
+// Renders the team_draw pulse game: three slots, revealed one at a time as the
+// host advances `revealedCount` from admin-host. Display-only — props in, no
+// Firebase, no writes, no state transitions owned here.
+
+function CrocodileTheatreDisplay({ teams, revealedCount }) {
+  return (
+    <div style={{
+      ...font,
+      height: '100vh',
+      background: 'radial-gradient(ellipse at center, #06140a 0%, #0a0a0a 70%)',
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      overflow: 'hidden', position: 'relative', padding: '4vw',
+    }}>
+      <style>{`
+        ${FLASH_STYLE}
+        @keyframes crocReveal {
+          0%   { opacity: 0; transform: scale(0.4) rotate(-4deg); }
+          60%  { transform: scale(1.06) rotate(1deg); }
+          100% { opacity: 1; transform: scale(1) rotate(0deg); }
+        }
+        @keyframes crocGlow {
+          0%, 100% { text-shadow: 0 0 30px rgba(34,197,94,0.4); }
+          50%      { text-shadow: 0 0 60px rgba(34,197,94,0.9), 0 0 100px rgba(34,197,94,0.3); }
+        }
+        @keyframes hiddenPulse {
+          0%, 100% { opacity: 0.25; transform: scale(1); }
+          50%      { opacity: 0.5; transform: scale(1.02); }
+        }
+      `}</style>
+
+      <p style={{
+        fontSize: 'clamp(1rem,2.5vw,2rem)',
+        color: '#22c55e', fontWeight: 700,
+        letterSpacing: '0.3em', textTransform: 'uppercase',
+        marginBottom: '1vh',
+      }}>
+        🐊 КРОКОДИЛ
+      </p>
+      <p style={{
+        fontSize: 'clamp(0.7rem,1.4vw,1.1rem)',
+        color: 'rgba(255,255,255,0.3)',
+        letterSpacing: '0.2em', textTransform: 'uppercase',
+        marginBottom: '5vh',
+      }}>
+        Tonight's Performers
+      </p>
+
+      <div style={{
+        display: 'flex', flexDirection: 'column',
+        gap: '2.5vh', width: '100%', maxWidth: '900px',
+      }}>
+        {teams.map((team, i) => {
+          const isRevealed = i < revealedCount
+          const isLatest = isRevealed && i === revealedCount - 1
+          return (
+            <div
+              key={team.teamId ?? i}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '3vw',
+                padding: 'clamp(1rem,2.5vh,2rem) clamp(1.5rem,3vw,3rem)',
+                borderRadius: '18px',
+                background: isRevealed
+                  ? 'rgba(34,197,94,0.08)'
+                  : 'rgba(255,255,255,0.02)',
+                border: isLatest
+                  ? '2px solid rgba(34,197,94,0.7)'
+                  : isRevealed
+                    ? '1px solid rgba(34,197,94,0.25)'
+                    : '1px solid rgba(255,255,255,0.06)',
+                boxShadow: isLatest
+                  ? '0 0 60px rgba(34,197,94,0.35)'
+                  : 'none',
+                animation: isLatest
+                  ? 'crocReveal 0.6s cubic-bezier(0.34,1.56,0.64,1)'
+                  : 'none',
+                transition: 'background 0.4s ease, border 0.4s ease',
+              }}
+            >
+              <span style={{
+                fontSize: 'clamp(2rem,5vw,4rem)',
+                fontWeight: 900,
+                color: isRevealed ? '#22c55e' : 'rgba(255,255,255,0.15)',
+                width: '1.4em', textAlign: 'center', flexShrink: 0,
+              }}>
+                {i + 1}
+              </span>
+              {isRevealed ? (
+                <span
+                  className={isLatest ? 'name-flash' : undefined}
+                  style={{
+                    fontSize: 'clamp(2rem,6vw,5rem)',
+                    fontWeight: 900, color: '#ffffff',
+                    lineHeight: 1,
+                    animation: isLatest ? 'crocGlow 2s ease-in-out infinite' : 'none',
+                    overflow: 'hidden', textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {team.teamName}
+                </span>
+              ) : (
+                <span style={{
+                  fontSize: 'clamp(2rem,6vw,5rem)',
+                  fontWeight: 900,
+                  color: 'rgba(255,255,255,0.15)',
+                  animation: 'hiddenPulse 2s ease-in-out infinite',
+                }}>
+                  ?
+                </span>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      <p style={{
+        position: 'absolute', bottom: '3vh',
+        color: 'rgba(255,255,255,0.15)',
+        fontSize: 'clamp(0.6rem,1vw,0.9rem)',
+        letterSpacing: '0.3em', textTransform: 'uppercase',
+      }}>
+        Crocodile Theatre
+      </p>
+    </div>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Display() {
@@ -1428,6 +1557,16 @@ export default function Display() {
         prizes={currentGame.prizes ?? []}
         prizeName={currentGame.prizeName}
         key={currentGame.dropStartedAt}
+      />
+    )
+  }
+
+  if (currentGame?.type === 'team_draw') {
+    return (
+      <CrocodileTheatreDisplay
+        teams={currentGame.teams ?? []}
+        revealedCount={currentGame.revealedCount ?? 0}
+        key={currentGame.startedAt}
       />
     )
   }
