@@ -1041,11 +1041,58 @@ function PrizeDropDisplay({ phase, prizes, prizeName }) {
 }
 
 // ─── Crocodile Theatre display ────────────────────────────────────────────────
-// Renders the team_draw pulse game: three slots, revealed one at a time as the
-// host advances `revealedCount` from admin-host. Display-only — props in, no
-// Firebase, no writes, no state transitions owned here.
+// Renders the team_draw pulse game: however many slots were drawn (2–5),
+// revealed one at a time as the host advances `revealedCount`, plus a
+// host-fired 60s countdown. Display-only — props in, no writes, no state
+// transitions owned here. The timer is computed from the host's start
+// timestamp (corrected for server-clock skew) so a reload resumes at the
+// correct remaining time; expiry is a render state and is never written back.
 
-function CrocodileTheatreDisplay({ teams, revealedCount }) {
+// Per-team-count font sizing so 2–5 name slots all stay readable on a TV.
+const CROC_NAME_FONT = {
+  2: 'clamp(2.5rem,7vw,6rem)',
+  3: 'clamp(2rem,6vw,5rem)',
+  4: 'clamp(1.6rem,5vw,4rem)',
+  5: 'clamp(1.3rem,4.2vw,3.2rem)',
+}
+
+function CrocodileTheatreDisplay({ teams, revealedCount, timerStartedAt, timerDuration }) {
+  // Correct our local clock to the RTDB server clock — host and display are
+  // different machines, and the host's start timestamp is server-anchored.
+  const [serverOffset, setServerOffset] = useState(0)
+  useEffect(() => {
+    const unsub = onValue(rtdbRef(db, '.info/serverTimeOffset'), (snap) => {
+      setServerOffset(snap.val() || 0)
+    })
+    return () => unsub()
+  }, [])
+
+  const hasTimer = !!timerStartedAt
+
+  // Local tick that drives re-render ONLY while a timer is running. `now` is
+  // read fresh here, so a mid-countdown reload lands at the right remaining
+  // time rather than restarting at 60. Nothing is written on expiry.
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!hasTimer) return
+    setNow(Date.now())
+    const id = setInterval(() => setNow(Date.now()), 100)
+    return () => clearInterval(id)
+  }, [hasTimer, timerStartedAt])
+
+  const duration = timerDuration ?? 60000
+  const remaining = hasTimer
+    ? Math.max(0, duration - ((now + serverOffset) - timerStartedAt))
+    : 0
+  const expired = hasTimer && remaining <= 0
+  const secs = remaining / 1000
+  const finalStretch = hasTimer && !expired && secs <= 10
+  // Whole seconds most of the way; tenths in the final 10s for drama.
+  const countdownText = secs > 10 ? String(Math.ceil(secs)) : secs.toFixed(1)
+
+  const count = teams.length
+  const nameFont = CROC_NAME_FONT[count] ?? CROC_NAME_FONT[5]
+
   return (
     <div style={{
       ...font,
@@ -1070,6 +1117,14 @@ function CrocodileTheatreDisplay({ teams, revealedCount }) {
           0%, 100% { opacity: 0.25; transform: scale(1); }
           50%      { opacity: 0.5; transform: scale(1.02); }
         }
+        @keyframes timerBeat {
+          0%, 100% { transform: scale(1); }
+          50%      { transform: scale(1.06); }
+        }
+        @keyframes timeUpFlash {
+          0%, 100% { opacity: 1; text-shadow: 0 0 50px rgba(239,68,68,0.7); }
+          50%      { opacity: 0.6; text-shadow: 0 0 90px rgba(239,68,68,1); }
+        }
       `}</style>
 
       <p style={{
@@ -1084,24 +1139,77 @@ function CrocodileTheatreDisplay({ teams, revealedCount }) {
         fontSize: 'clamp(0.7rem,1.4vw,1.1rem)',
         color: 'rgba(255,255,255,0.3)',
         letterSpacing: '0.2em', textTransform: 'uppercase',
-        marginBottom: '5vh',
+        marginBottom: hasTimer ? '2vh' : '5vh',
       }}>
-        Tonight's Performers
+        {hasTimer ? 'On the Clock' : "Tonight's Performers"}
       </p>
 
+      {/* Countdown — the dominant element on screen while a timer runs. */}
+      {hasTimer && (
+        expired ? (
+          <p style={{
+            fontSize: 'clamp(4rem,16vw,14rem)',
+            fontWeight: 900, color: '#ef4444', lineHeight: 1,
+            letterSpacing: '0.05em', margin: '1vh 0 3vh',
+            animation: 'timeUpFlash 0.8s ease-in-out infinite',
+          }}>
+            ВРЕМЯ!
+          </p>
+        ) : (
+          <p style={{
+            fontSize: 'clamp(5rem,22vw,18rem)',
+            fontWeight: 900, lineHeight: 0.95,
+            color: finalStretch ? '#fbbf24' : '#22c55e',
+            fontVariantNumeric: 'tabular-nums',
+            margin: '1vh 0 3vh',
+            textShadow: finalStretch
+              ? '0 0 60px rgba(251,191,36,0.7)'
+              : '0 0 50px rgba(34,197,94,0.5)',
+            animation: finalStretch ? 'timerBeat 1s ease-in-out infinite' : 'none',
+          }}>
+            {countdownText}
+          </p>
+        )
+      )}
+
+      {/* Team slots. Large when no timer is running; a compact strip once the
+          countdown takes over the screen. */}
       <div style={{
-        display: 'flex', flexDirection: 'column',
-        gap: '2.5vh', width: '100%', maxWidth: '900px',
+        display: 'flex', flexDirection: hasTimer ? 'row' : 'column',
+        flexWrap: hasTimer ? 'wrap' : 'nowrap',
+        justifyContent: 'center', alignItems: 'center',
+        gap: hasTimer ? '1.2vw' : '2vh',
+        width: '100%', maxWidth: '1000px',
       }}>
         {teams.map((team, i) => {
           const isRevealed = i < revealedCount
           const isLatest = isRevealed && i === revealedCount - 1
+          if (hasTimer) {
+            // Compact chip form — the teams have already been read out; the
+            // clock is the focus now.
+            return (
+              <span
+                key={team.teamId ?? i}
+                style={{
+                  fontSize: 'clamp(0.9rem,2vw,1.6rem)',
+                  fontWeight: 800,
+                  padding: '0.4em 0.9em', borderRadius: '999px',
+                  color: isRevealed ? '#ffffff' : 'rgba(255,255,255,0.2)',
+                  background: isRevealed ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${isRevealed ? 'rgba(34,197,94,0.3)' : 'rgba(255,255,255,0.06)'}`,
+                }}
+              >
+                {isRevealed ? team.teamName : '?'}
+              </span>
+            )
+          }
           return (
             <div
               key={team.teamId ?? i}
               style={{
                 display: 'flex', alignItems: 'center', gap: '3vw',
-                padding: 'clamp(1rem,2.5vh,2rem) clamp(1.5rem,3vw,3rem)',
+                width: '100%',
+                padding: 'clamp(0.8rem,2vh,1.8rem) clamp(1.5rem,3vw,3rem)',
                 borderRadius: '18px',
                 background: isRevealed
                   ? 'rgba(34,197,94,0.08)'
@@ -1111,9 +1219,7 @@ function CrocodileTheatreDisplay({ teams, revealedCount }) {
                   : isRevealed
                     ? '1px solid rgba(34,197,94,0.25)'
                     : '1px solid rgba(255,255,255,0.06)',
-                boxShadow: isLatest
-                  ? '0 0 60px rgba(34,197,94,0.35)'
-                  : 'none',
+                boxShadow: isLatest ? '0 0 60px rgba(34,197,94,0.35)' : 'none',
                 animation: isLatest
                   ? 'crocReveal 0.6s cubic-bezier(0.34,1.56,0.64,1)'
                   : 'none',
@@ -1121,10 +1227,11 @@ function CrocodileTheatreDisplay({ teams, revealedCount }) {
               }}
             >
               <span style={{
-                fontSize: 'clamp(2rem,5vw,4rem)',
+                fontSize: nameFont,
                 fontWeight: 900,
                 color: isRevealed ? '#22c55e' : 'rgba(255,255,255,0.15)',
                 width: '1.4em', textAlign: 'center', flexShrink: 0,
+                lineHeight: 1,
               }}>
                 {i + 1}
               </span>
@@ -1132,22 +1239,19 @@ function CrocodileTheatreDisplay({ teams, revealedCount }) {
                 <span
                   className={isLatest ? 'name-flash' : undefined}
                   style={{
-                    fontSize: 'clamp(2rem,6vw,5rem)',
-                    fontWeight: 900, color: '#ffffff',
-                    lineHeight: 1,
+                    fontSize: nameFont,
+                    fontWeight: 900, color: '#ffffff', lineHeight: 1,
                     animation: isLatest ? 'crocGlow 2s ease-in-out infinite' : 'none',
-                    overflow: 'hidden', textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   }}
                 >
                   {team.teamName}
                 </span>
               ) : (
                 <span style={{
-                  fontSize: 'clamp(2rem,6vw,5rem)',
-                  fontWeight: 900,
-                  color: 'rgba(255,255,255,0.15)',
-                  animation: 'hiddenPulse 2s ease-in-out infinite',
+                  fontSize: nameFont,
+                  fontWeight: 900, color: 'rgba(255,255,255,0.15)',
+                  animation: 'hiddenPulse 2s ease-in-out infinite', lineHeight: 1,
                 }}>
                   ?
                 </span>
@@ -1566,6 +1670,8 @@ export default function Display() {
       <CrocodileTheatreDisplay
         teams={currentGame.teams ?? []}
         revealedCount={currentGame.revealedCount ?? 0}
+        timerStartedAt={currentGame.timerStartedAt ?? null}
+        timerDuration={currentGame.timerDuration ?? 60000}
         key={currentGame.startedAt}
       />
     )
