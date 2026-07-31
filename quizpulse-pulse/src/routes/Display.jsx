@@ -1273,6 +1273,264 @@ function CrocodileTheatreDisplay({ teams, revealedCount, timerStartedAt, timerDu
   )
 }
 
+// ─── BlitzPulse display ───────────────────────────────────────────────────────
+// Renders the blitz_pulse game: one team at a time on the left, and the prize
+// they won revealed on the right. The host asks each team their
+// question off-screen and rules on the answer, so every transition here arrives
+// as a phase change from admin-host — nothing on this screen advances itself.
+// Reveal styling is the Prize Drop visual language (screen flash, drop-in,
+// glow, particles) so the two prize moments read as the same thing.
+
+function BlitzPulseDisplay({ currentGame }) {
+  const phase = currentGame?.phase ?? 'awaiting_team'
+  const team = currentGame?.currentTeam ?? null
+  const prize = currentGame?.currentPrize ?? null
+  const awardedCount = currentGame?.awardedCount ?? 0
+  const maxTeams = currentGame?.maxTeams ?? 8
+
+  const styles = (
+    <style>{`
+      ${FLASH_STYLE}
+      @keyframes prizeDrop {
+        0% { transform: translateY(-120vh) rotate(-3deg) scale(1.3); opacity: 0; }
+        60% { transform: translateY(18px) rotate(1deg) scale(0.97); opacity: 1; }
+        75% { transform: translateY(-8px) rotate(-0.5deg) scale(1.01); }
+        90% { transform: translateY(4px) rotate(0); }
+        100% { transform: translateY(0) rotate(0) scale(1); }
+      }
+      @keyframes pulseGlow {
+        0%, 100% { box-shadow: 0 0 30px rgba(249,115,22,0.4); }
+        50% { box-shadow: 0 0 80px rgba(249,115,22,0.8), 0 0 160px rgba(249,115,22,0.2); }
+      }
+      @keyframes screenFlash {
+        0%, 100% { opacity: 0; }
+        50% { opacity: 0.15; }
+      }
+      @keyframes particleFloat {
+        0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+        100% { transform: translateY(-200px) rotate(720deg); opacity: 0; }
+      }
+      @keyframes waitingPulse {
+        0%, 100% { opacity: 0.3; transform: scale(1); }
+        50% { opacity: 0.7; transform: scale(1.03); }
+      }
+      @keyframes teamSlideIn {
+        0% { opacity: 0; transform: translateX(-60px) scale(0.94); }
+        100% { opacity: 1; transform: translateX(0) scale(1); }
+      }
+      @keyframes anticipate {
+        0%, 100% { opacity: 0.35; }
+        50% { opacity: 0.8; }
+      }
+    `}</style>
+  )
+
+  const shell = (children) => (
+    <div style={{
+      ...font,
+      height: '100vh',
+      background: 'radial-gradient(ellipse at center, #1a0f00 0%, #0a0a0f 70%)',
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      overflow: 'hidden', position: 'relative', padding: '4vw',
+    }}>
+      {styles}
+
+      {/* Scanline — same texture as Prize Drop */}
+      <div style={{
+        position: 'absolute', inset: 0,
+        background: 'linear-gradient(transparent 50%, rgba(0,0,0,0.03) 50%)',
+        backgroundSize: '100% 4px',
+        pointerEvents: 'none', zIndex: 1,
+      }} />
+
+      <p style={{
+        position: 'absolute', top: '4vh',
+        fontSize: 'clamp(0.8rem,1.8vw,1.5rem)',
+        color: '#f97316', fontWeight: 700,
+        letterSpacing: '0.4em', textTransform: 'uppercase',
+        zIndex: 3,
+      }}>
+        🏆 BlitzPulse
+      </p>
+
+      {children}
+
+      <p style={{
+        position: 'absolute', bottom: '3vh',
+        color: 'rgba(255,255,255,0.15)',
+        fontSize: 'clamp(0.6rem,1vw,0.9rem)',
+        letterSpacing: '0.3em', textTransform: 'uppercase',
+        zIndex: 3,
+      }}>
+        Team {Math.min(awardedCount + (phase === 'team_shown' ? 1 : 0), maxTeams)} of {maxTeams}
+      </p>
+    </div>
+  )
+
+  // Wrap-up — every team has had their turn.
+  if (phase === 'complete') {
+    return shell(
+      <div style={{ textAlign: 'center', zIndex: 3 }}>
+        <p style={{
+          fontSize: 'clamp(2.5rem,9vw,8rem)',
+          fontWeight: 900, color: '#ffffff', lineHeight: 1,
+          textShadow: '0 0 50px rgba(249,115,22,0.5)',
+        }}>
+          THAT'S A WRAP
+        </p>
+        <p style={{
+          marginTop: '3vh',
+          fontSize: 'clamp(0.8rem,1.6vw,1.3rem)',
+          color: 'rgba(255,255,255,0.3)',
+          letterSpacing: '0.25em', textTransform: 'uppercase',
+        }}>
+          Speak to your host to claim
+        </p>
+      </div>
+    )
+  }
+
+  // Between rounds — no team on screen yet.
+  if (!team) {
+    return shell(
+      <div style={{ textAlign: 'center', zIndex: 3 }}>
+        <p style={{
+          fontSize: 'clamp(2rem,7vw,6rem)',
+          fontWeight: 900,
+          color: 'rgba(255,255,255,0.1)',
+          animation: 'waitingPulse 2s ease-in-out infinite',
+        }}>
+          NEXT TEAM UP
+        </p>
+        <p style={{
+          marginTop: '3vh',
+          fontSize: 'clamp(0.7rem,1.3vw,1.1rem)',
+          color: 'rgba(255,255,255,0.25)',
+          letterSpacing: '0.25em', textTransform: 'uppercase',
+        }}>
+          Answer correctly to win a prize
+        </p>
+      </div>
+    )
+  }
+
+  const awarded = phase === 'prize_awarded' && !!prize
+
+  return shell(
+    <>
+      {/* Screen flash on the award beat. Keyed on the team so consecutive
+          awards each replay it; screenFlash ends back at opacity 0, so it
+          needs no timer to clear itself. */}
+      {awarded && (
+        <div key={`flash-${team.teamId}`} style={{
+          position: 'absolute', inset: 0,
+          background: '#f97316',
+          animation: 'screenFlash 0.4s ease',
+          zIndex: 2, pointerEvents: 'none',
+        }} />
+      )}
+
+      {/* Particles on the award beat */}
+      {awarded && (
+        ['✨','⭐','💥','✨','⭐','💫','✨','⭐'].map((s, i) => (
+          <div key={`${team.teamId}-${i}`} style={{
+            position: 'absolute',
+            fontSize: 'clamp(1rem,2.5vw,2rem)',
+            left: `${52 + (i % 4) * 11}%`,
+            bottom: `${20 + (i % 3) * 15}%`,
+            animation: `particleFloat ${1.5 + i * 0.2}s ease-out forwards`,
+            animationDelay: `${i * 0.1}s`,
+            zIndex: 2,
+          }}>{s}</div>
+        ))
+      )}
+
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        gap: 'clamp(1.5rem,4vw,5rem)',
+        width: '100%', maxWidth: '1600px', zIndex: 3,
+      }}>
+        {/* LEFT — the team on the spot */}
+        <div key={team.teamId} style={{
+          flex: '1 1 0', minWidth: 0, textAlign: 'right',
+          animation: 'teamSlideIn 0.5s cubic-bezier(0.16,1,0.3,1)',
+        }}>
+          <p style={{
+            fontSize: 'clamp(0.7rem,1.3vw,1.1rem)',
+            color: 'rgba(255,255,255,0.35)',
+            letterSpacing: '0.3em', textTransform: 'uppercase',
+            marginBottom: '1.5vh',
+          }}>
+            On the spot
+          </p>
+          <p style={{
+            fontSize: 'clamp(1.8rem,5.5vw,5rem)',
+            fontWeight: 900, color: '#ffffff', lineHeight: 1.05,
+            textShadow: awarded
+              ? '0 0 50px rgba(249,115,22,0.6)'
+              : '0 0 30px rgba(249,115,22,0.25)',
+            wordBreak: 'break-word',
+          }}>
+            {team.teamName}
+          </p>
+        </div>
+
+        {/* Divider */}
+        <div style={{
+          width: 2, alignSelf: 'stretch', flexShrink: 0,
+          minHeight: 'clamp(120px,22vh,260px)',
+          background: 'linear-gradient(transparent, rgba(249,115,22,0.5), transparent)',
+        }} />
+
+        {/* RIGHT — the prize, or the anticipation before it */}
+        <div style={{ flex: '1 1 0', minWidth: 0, textAlign: 'left' }}>
+          {awarded ? (
+            <>
+              <p style={{
+                fontSize: 'clamp(0.7rem,1.3vw,1.1rem)',
+                color: '#f97316', fontWeight: 700,
+                letterSpacing: '0.3em', textTransform: 'uppercase',
+                marginBottom: '1.5vh',
+              }}>
+                🎁 Wins
+              </p>
+              <div style={{
+                background: 'linear-gradient(135deg, #1a0f00, #0f0f1a)',
+                border: '2px solid rgba(249,115,22,0.6)',
+                borderRadius: 20,
+                padding: 'clamp(1.2rem,3vw,2.5rem) clamp(1.5rem,3.5vw,3rem)',
+                animation: 'prizeDrop 0.7s cubic-bezier(0.34,1.2,0.64,1), pulseGlow 2s ease-in-out 0.7s infinite',
+              }}>
+                <p style={{
+                  fontSize: 'clamp(1.6rem,4.5vw,4rem)',
+                  fontWeight: 900, color: '#ffffff',
+                  lineHeight: 1.1, margin: 0,
+                  textShadow: '0 0 40px rgba(249,115,22,0.4)',
+                  wordBreak: 'break-word',
+                }}>
+                  {prize.prizeName}
+                </p>
+              </div>
+            </>
+          ) : (
+            <p style={{
+              fontSize: 'clamp(1.4rem,4vw,3.5rem)',
+              fontWeight: 900,
+              color: 'rgba(255,255,255,0.3)',
+              letterSpacing: '0.06em', textTransform: 'uppercase',
+              lineHeight: 1.15,
+              animation: 'anticipate 1.8s ease-in-out infinite',
+            }}>
+              Answer to win…
+            </p>
+          )}
+        </div>
+      </div>
+    </>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Display() {
@@ -1672,6 +1930,15 @@ export default function Display() {
         revealedCount={currentGame.revealedCount ?? 0}
         timerStartedAt={currentGame.timerStartedAt ?? null}
         timerDuration={currentGame.timerDuration ?? 60000}
+        key={currentGame.startedAt}
+      />
+    )
+  }
+
+  if (currentGame?.type === 'blitz_pulse') {
+    return (
+      <BlitzPulseDisplay
+        currentGame={currentGame}
         key={currentGame.startedAt}
       />
     )
