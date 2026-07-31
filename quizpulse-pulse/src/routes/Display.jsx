@@ -1281,6 +1281,179 @@ function CrocodileTheatreDisplay({ teams, revealedCount, timerStartedAt, timerDu
 // Reveal styling is the Prize Drop visual language (screen flash, drop-in,
 // glow, particles) so the two prize moments read as the same thing.
 
+// The reveal beat, mirroring PrizeDropDisplay's dropping animation exactly:
+// a fast slot spin, a slow-down into the winning row at 3.5s, then the prize
+// card at 4.2s. Same keyframes, same timings, so the two games land identically
+// — the host's award is instant, and this fills the same window Prize Drop
+// fills rather than leaving a dead pause before the prize appears.
+//
+// Mounted fresh per award (the parent keys it on the team), so each round
+// replays the beat without the parent having to reset any state. Presentation
+// only: local animation state, exactly as PrizeDropDisplay does it, no writes
+// and no RTDB phase change — the game's own phase stays 'prize_awarded'
+// throughout.
+function BlitzPulsePrizeReveal({ prizeName }) {
+  const [animPhase, setAnimPhase] = useState('spinning')
+
+  useEffect(() => {
+    const t1 = setTimeout(() => setAnimPhase('revealing'), 3500)
+    const t2 = setTimeout(() => setAnimPhase('revealed'), 4200)
+    return () => {
+      clearTimeout(t1)
+      clearTimeout(t2)
+    }
+  }, [])
+
+  // Same reel construction as PrizeDropDisplay — pad past 20 rows so the loop
+  // never runs dry, then land the real prize last. BlitzPulse's payload has no
+  // remaining-pool list (Prize Drop carries one), so generic tokens stand in
+  // for the other names.
+  const reelItems = []
+  while (reelItems.length < 20) reelItems.push('🎁', '⚡', '🏆', '🎁')
+  reelItems.push(prizeName)
+
+  const spinning = animPhase === 'spinning' || animPhase === 'revealing'
+
+  return (
+    <>
+      {/* Flash on the reveal beat, same 700ms transient window Prize Drop uses.
+          `forwards` keeps it settled on opacity 0 rather than snapping back to
+          the base style's solid orange. */}
+      {animPhase === 'revealing' && (
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: '#f97316',
+          animation: 'screenFlash 0.4s ease forwards',
+          zIndex: 2, pointerEvents: 'none',
+        }} />
+      )}
+
+      {/* Particles, once the prize has landed */}
+      {animPhase === 'revealed' && (
+        ['✨','⭐','💥','✨','⭐','💫','✨','⭐'].map((s, i) => (
+          <div key={i} style={{
+            position: 'absolute',
+            fontSize: 'clamp(1rem,2.5vw,2rem)',
+            left: `${52 + (i % 4) * 11}%`,
+            bottom: `${20 + (i % 3) * 15}%`,
+            animation: `particleFloat ${1.5 + i * 0.2}s ease-out forwards`,
+            animationDelay: `${i * 0.1}s`,
+            zIndex: 2,
+          }}>{s}</div>
+        ))
+      )}
+
+      <p style={{
+        fontSize: 'clamp(0.7rem,1.3vw,1.1rem)',
+        color: '#f97316', fontWeight: 700,
+        letterSpacing: '0.3em', textTransform: 'uppercase',
+        marginBottom: '1.5vh',
+        animation: spinning ? 'electricFlicker 2s infinite' : 'none',
+      }}>
+        {spinning ? '⚡ Selecting' : '🎁 Wins'}
+      </p>
+
+      {spinning ? (
+        <>
+          {/* Slot reel — Prize Drop's markup and animation, sized to the right
+              column. Row height matches Prize Drop's so the spin reads at the
+              same speed against the same translate distances. */}
+          <div style={{
+            position: 'relative',
+            width: '100%',
+            height: 'clamp(80px,14vh,140px)',
+            overflow: 'hidden',
+            border: '2px solid rgba(249,115,22,0.5)',
+            borderRadius: 16,
+            background: '#111',
+            boxShadow: '0 0 40px rgba(249,115,22,0.2)',
+          }}>
+            {/* Fades */}
+            <div style={{
+              position: 'absolute', top: 0, left: 0,
+              right: 0, height: '35%', zIndex: 2,
+              background: 'linear-gradient(#111, transparent)',
+            }} />
+            <div style={{
+              position: 'absolute', bottom: 0, left: 0,
+              right: 0, height: '35%', zIndex: 2,
+              background: 'linear-gradient(transparent, #111)',
+            }} />
+            {/* Centre line */}
+            <div style={{
+              position: 'absolute', top: '50%', left: 0,
+              right: 0, height: 2,
+              background: 'rgba(249,115,22,0.6)',
+              transform: 'translateY(-50%)', zIndex: 3,
+              boxShadow: '0 0 10px rgba(249,115,22,0.8)',
+            }} />
+
+            {/* Reel */}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              animation: animPhase === 'spinning'
+                ? 'slotSpin 0.25s linear infinite'
+                : 'slotSlowSpin 0.9s ease-out forwards',
+            }}>
+              {reelItems.map((item, i) => (
+                <div key={i} style={{
+                  height: 'clamp(80px,14vh,140px)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: i === reelItems.length - 1
+                    ? 'clamp(1.2rem,3.5vw,3rem)'
+                    : 'clamp(0.9rem,2.5vw,2rem)',
+                  fontWeight: 900,
+                  color: i === reelItems.length - 1
+                    ? '#f97316'
+                    : 'rgba(255,255,255,0.35)',
+                  flexShrink: 0,
+                  width: '100%',
+                  textAlign: 'center',
+                  padding: '0 1rem',
+                  letterSpacing: '0.02em',
+                }}>
+                  {item}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <p style={{
+            marginTop: '2vh',
+            fontSize: 'clamp(0.7rem,1.2vw,1rem)',
+            color: 'rgba(255,255,255,0.2)',
+            letterSpacing: '0.2em',
+          }}>
+            SELECTING PRIZE...
+          </p>
+        </>
+      ) : (
+        <div style={{
+          background: 'linear-gradient(135deg, #1a0f00, #0f0f1a)',
+          border: '2px solid rgba(249,115,22,0.6)',
+          borderRadius: 20,
+          padding: 'clamp(1.2rem,3vw,2.5rem) clamp(1.5rem,3.5vw,3rem)',
+          animation: 'prizeDrop 0.7s cubic-bezier(0.34,1.2,0.64,1), pulseGlow 2s ease-in-out 0.7s infinite',
+        }}>
+          <p style={{
+            fontSize: 'clamp(1.6rem,4.5vw,4rem)',
+            fontWeight: 900, color: '#ffffff',
+            lineHeight: 1.1, margin: 0,
+            textShadow: '0 0 40px rgba(249,115,22,0.4)',
+            wordBreak: 'break-word',
+          }}>
+            {prizeName}
+          </p>
+        </div>
+      )}
+    </>
+  )
+}
+
 function BlitzPulseDisplay({ currentGame }) {
   const phase = currentGame?.phase ?? 'awaiting_team'
   const team = currentGame?.currentTeam ?? null
@@ -1305,6 +1478,22 @@ function BlitzPulseDisplay({ currentGame }) {
       @keyframes screenFlash {
         0%, 100% { opacity: 0; }
         50% { opacity: 0.15; }
+      }
+      @keyframes slotSpin {
+        0% { transform: translateY(0); }
+        100% { transform: translateY(-1000px); }
+      }
+      @keyframes slotSlowSpin {
+        0% { transform: translateY(0); }
+        100% { transform: translateY(-400px); }
+      }
+      @keyframes electricFlicker {
+        0%, 100% { opacity: 1; }
+        92% { opacity: 1; }
+        93% { opacity: 0.3; }
+        94% { opacity: 1; }
+        97% { opacity: 0.5; }
+        98% { opacity: 1; }
       }
       @keyframes particleFloat {
         0% { transform: translateY(0) rotate(0deg); opacity: 1; }
@@ -1419,33 +1608,9 @@ function BlitzPulseDisplay({ currentGame }) {
 
   return shell(
     <>
-      {/* Screen flash on the award beat. Keyed on the team so consecutive
-          awards each replay it; screenFlash ends back at opacity 0, so it
-          needs no timer to clear itself. */}
-      {awarded && (
-        <div key={`flash-${team.teamId}`} style={{
-          position: 'absolute', inset: 0,
-          background: '#f97316',
-          animation: 'screenFlash 0.4s ease',
-          zIndex: 2, pointerEvents: 'none',
-        }} />
-      )}
-
-      {/* Particles on the award beat */}
-      {awarded && (
-        ['✨','⭐','💥','✨','⭐','💫','✨','⭐'].map((s, i) => (
-          <div key={`${team.teamId}-${i}`} style={{
-            position: 'absolute',
-            fontSize: 'clamp(1rem,2.5vw,2rem)',
-            left: `${52 + (i % 4) * 11}%`,
-            bottom: `${20 + (i % 3) * 15}%`,
-            animation: `particleFloat ${1.5 + i * 0.2}s ease-out forwards`,
-            animationDelay: `${i * 0.1}s`,
-            zIndex: 2,
-          }}>{s}</div>
-        ))
-      )}
-
+      {/* The flash and particles are owned by BlitzPulsePrizeReveal below, so
+          they fire on the reveal beat rather than the moment the award lands.
+          They're absolutely positioned against this shell, not the column. */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         gap: 'clamp(1.5rem,4vw,5rem)',
@@ -1486,33 +1651,10 @@ function BlitzPulseDisplay({ currentGame }) {
         {/* RIGHT — the prize, or the anticipation before it */}
         <div style={{ flex: '1 1 0', minWidth: 0, textAlign: 'left' }}>
           {awarded ? (
-            <>
-              <p style={{
-                fontSize: 'clamp(0.7rem,1.3vw,1.1rem)',
-                color: '#f97316', fontWeight: 700,
-                letterSpacing: '0.3em', textTransform: 'uppercase',
-                marginBottom: '1.5vh',
-              }}>
-                🎁 Wins
-              </p>
-              <div style={{
-                background: 'linear-gradient(135deg, #1a0f00, #0f0f1a)',
-                border: '2px solid rgba(249,115,22,0.6)',
-                borderRadius: 20,
-                padding: 'clamp(1.2rem,3vw,2.5rem) clamp(1.5rem,3.5vw,3rem)',
-                animation: 'prizeDrop 0.7s cubic-bezier(0.34,1.2,0.64,1), pulseGlow 2s ease-in-out 0.7s infinite',
-              }}>
-                <p style={{
-                  fontSize: 'clamp(1.6rem,4.5vw,4rem)',
-                  fontWeight: 900, color: '#ffffff',
-                  lineHeight: 1.1, margin: 0,
-                  textShadow: '0 0 40px rgba(249,115,22,0.4)',
-                  wordBreak: 'break-word',
-                }}>
-                  {prize.prizeName}
-                </p>
-              </div>
-            </>
+            <BlitzPulsePrizeReveal
+              key={team.teamId}
+              prizeName={prize.prizeName}
+            />
           ) : (
             <p style={{
               fontSize: 'clamp(1.4rem,4vw,3.5rem)',
