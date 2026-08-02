@@ -1673,11 +1673,85 @@ function BlitzPulseDisplay({ currentGame }) {
   )
 }
 
+// ─── Always-on overlays ───────────────────────────────────────────────────────
+// Both of these render above whatever the dispatch below returns. They used to
+// live in the main return, which put them behind six game-renderer early
+// returns and made them unreachable during every mini-game: a dropped
+// connection left a silently frozen screen, and a reload mid-game left audio
+// locked with no prompt — until the game ended and the prompt ambushed the TV.
+
+function ReconnectingOverlay() {
+  return (
+    <div style={{
+      ...font,
+      position: 'fixed', inset: 0, zIndex: 10000,
+      background: 'rgba(0,0,0,0.85)',
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center', gap: '2vh',
+    }}>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg) } }
+      `}</style>
+      <div style={{
+        width: 48, height: 48, borderRadius: '50%',
+        border: '3px solid rgba(249,115,22,0.2)',
+        borderTopColor: '#f97316',
+        animation: 'spin 1s linear infinite',
+      }} />
+      <p style={{
+        color: '#f97316', fontWeight: 800,
+        fontSize: 'clamp(1rem,2vw,2rem)',
+        letterSpacing: '0.2em', textTransform: 'uppercase',
+      }}>
+        Reconnecting...
+      </p>
+    </div>
+  )
+}
+
+// Deliberately small and cornered. Audio is a nice-to-have on a display and
+// must never cover the game — if the host never taps this, the screen stays
+// silent and fully functional. Silence is an acceptable degradation; a covered
+// winner reveal is not.
+function AudioUnlockChip({ onEnable, onDismiss }) {
+  const btn = {
+    ...font,
+    background: 'none', border: 'none', padding: 0,
+    cursor: 'pointer', color: '#f97316', fontWeight: 800,
+    letterSpacing: '0.1em', textTransform: 'uppercase',
+  }
+
+  return (
+    <div style={{
+      position: 'fixed', bottom: '2vh', left: '2vw', zIndex: 9998,
+      display: 'flex', alignItems: 'center', gap: '0.75rem',
+      background: 'rgba(0,0,0,0.72)',
+      border: '1px solid rgba(249,115,22,0.4)',
+      borderRadius: 999,
+      padding: '0.5rem 0.85rem',
+    }}>
+      <button
+        onClick={onEnable}
+        style={{ ...btn, fontSize: 'clamp(0.75rem,1.1vw,1rem)' }}
+      >
+        🔊 Tap to enable sound
+      </button>
+      <button
+        onClick={onDismiss}
+        aria-label="Dismiss"
+        style={{ ...btn, color: 'rgba(255,255,255,0.4)', fontSize: '1.1rem', lineHeight: 1 }}
+      >
+        ×
+      </button>
+    </div>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Display() {
   const { id: sessionId } = useParams()
-  const { teams, state, winnerName, loading, session, error } = usePulseSession(sessionId)
+  const { teams, state, winnerName, loading, session, error, connected } = usePulseSession(sessionId)
 
   const audioRef = useRef(null)
   const chargingAudioRef = useRef(null)
@@ -1686,8 +1760,8 @@ export default function Display() {
   const beerAudioRef = useRef(null)
   const prizesAudioRef = useRef(null)
   const [audioEnabled, setAudioEnabled] = useState(false)
+  const [audioDismissed, setAudioDismissed] = useState(false)
 
-  const [rtdbConnected, setRtdbConnected] = useState(true)
   const [shockGame, setShockGame] = useState(null)
 
   useEffect(() => {
@@ -1727,14 +1801,6 @@ export default function Display() {
         ref.current.src = ''
       })
     }
-  }, [])
-
-  useEffect(() => {
-    const connRef = rtdbRef(db, '.info/connected')
-    const unsub = onValue(connRef, (snap) => {
-      setRtdbConnected(snap.val() === true)
-    })
-    return () => unsub()
   }, [])
 
   useEffect(() => {
@@ -1876,6 +1942,42 @@ export default function Display() {
 
   const revealFrame = useRevealAnimation(state, landingTarget, teams)
 
+  const enableAudio = async () => {
+    const allRefs = [
+      audioRef,
+      chargingAudioRef,
+      successAudioRef,
+      flatlineAudioRef,
+      beerAudioRef,
+      prizesAudioRef,
+    ]
+    await Promise.all(allRefs.map(ref => {
+      if (!ref.current) return Promise.resolve()
+      return ref.current.play()
+        .then(() => {
+          ref.current.pause()
+          ref.current.currentTime = 0
+        })
+        .catch(() => {})
+    }))
+    setAudioEnabled(true)
+  }
+
+  // Every branch below returns through this, so the overlays stay reachable
+  // whichever game is on screen. Nothing else about the dispatch changes.
+  const withOverlays = (content) => (
+    <>
+      {content}
+      {!audioEnabled && !audioDismissed && (
+        <AudioUnlockChip
+          onEnable={enableAudio}
+          onDismiss={() => setAudioDismissed(true)}
+        />
+      )}
+      {!connected && <ReconnectingOverlay />}
+    </>
+  )
+
   if (!sessionId) {
     return (
       <div style={{ ...font, height: '100vh', background: '#0a0a0a',
@@ -1892,8 +1994,10 @@ export default function Display() {
     )
   }
 
+  // Wrapped too: if the very first connection never lands, `loading` stays true
+  // forever, and a bare spinner is indistinguishable from a slow one.
   if (loading) {
-    return (
+    return withOverlays(
       <div style={{ ...font, height: '100vh', background: '#0a0a0a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{
           width: 12, height: 12, borderRadius: '50%', background: '#2a2a2a',
@@ -1926,12 +2030,17 @@ export default function Display() {
     )
   }
 
-  if (shockGame && shockGame.phase !== null && shockGame.phase !== 'idle') {
-    return <ShockTheRoomDisplay game={shockGame} />
+  // 'complete' is terminal: endShockTheRoom writes it and nothing ever clears
+  // the node, so without this exclusion a finished Shock The Room latched the
+  // display on the survivor screen and blocked every other game for the rest of
+  // the session. The audio effect above already treated 'complete' as terminal.
+  if (shockGame && shockGame.phase !== null && shockGame.phase !== 'idle'
+    && shockGame.phase !== 'complete') {
+    return withOverlays(<ShockTheRoomDisplay game={shockGame} />)
   }
 
   if (currentGame?.type === 'closest_answer' && currentGame?.phase === 'active') {
-    return (
+    return withOverlays(
       <div style={{
         height: '100vh', background: '#0a0a0f',
         display: 'flex', flexDirection: 'column',
@@ -1975,7 +2084,7 @@ export default function Display() {
   }
 
   if (currentGame?.type === 'beer_shock' && currentGame?.phase === 'active') {
-    return (
+    return withOverlays(
       <div style={{
         height: '100vh',
         background: 'radial-gradient(ellipse at center, #1a0f00 0%, #0a0a0a 70%)',
@@ -2055,7 +2164,7 @@ export default function Display() {
   }
 
   if (currentGame?.type === 'prize_drop') {
-    return (
+    return withOverlays(
       <PrizeDropDisplay
         phase={currentGame.phase}
         prizes={currentGame.prizes ?? []}
@@ -2066,7 +2175,7 @@ export default function Display() {
   }
 
   if (currentGame?.type === 'team_draw') {
-    return (
+    return withOverlays(
       <CrocodileTheatreDisplay
         teams={currentGame.teams ?? []}
         revealedCount={currentGame.revealedCount ?? 0}
@@ -2078,7 +2187,7 @@ export default function Display() {
   }
 
   if (currentGame?.type === 'blitz_pulse') {
-    return (
+    return withOverlays(
       <BlitzPulseDisplay
         currentGame={currentGame}
         key={currentGame.startedAt}
@@ -2099,84 +2208,18 @@ export default function Display() {
     screen = <IdleScreen />
   }
 
-  return (
+  // The background-music element stays on this path only. The game branches
+  // above return before it mounts, which is what stops the bed playing over
+  // them — hoisting it alongside the overlays would start music during the
+  // games that aren't in `muteBackground`.
+  return withOverlays(
     <>
-      {!audioEnabled && (
-        <div
-          onClick={async () => {
-            const allRefs = [
-              audioRef,
-              chargingAudioRef,
-              successAudioRef,
-              flatlineAudioRef,
-              beerAudioRef,
-              prizesAudioRef,
-            ]
-            await Promise.all(allRefs.map(ref => {
-              if (!ref.current) return Promise.resolve()
-              return ref.current.play()
-                .then(() => {
-                  ref.current.pause()
-                  ref.current.currentTime = 0
-                })
-                .catch(() => {})
-            }))
-            setAudioEnabled(true)
-          }}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 9999,
-            background: 'rgba(0,0,0,0.85)',
-            display: 'flex', flexDirection: 'column',
-            alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', gap: '1rem',
-          }}
-        >
-          <p style={{ fontSize: '3rem' }}>🔊</p>
-          <p style={{
-            color: '#fff', fontWeight: 800,
-            fontSize: 'clamp(1rem, 3vw, 2rem)',
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-          }}>
-            Click to enable audio
-          </p>
-          <p style={{ color: '#555', fontSize: '0.9rem' }}>
-            Required once per session
-          </p>
-        </div>
-      )}
       {screen}
-      {!rtdbConnected && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 100,
-          background: 'rgba(0,0,0,0.85)',
-          display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center', gap: '2vh',
-        }}>
-          <style>{`
-            @keyframes spin { to { transform: rotate(360deg) } }
-          `}</style>
-          <div style={{
-            width: 48, height: 48, borderRadius: '50%',
-            border: '3px solid rgba(249,115,22,0.2)',
-            borderTopColor: '#f97316',
-            animation: 'spin 1s linear infinite',
-          }} />
-          <p style={{
-            color: '#f97316', fontWeight: 800,
-            fontSize: 'clamp(1rem,2vw,2rem)',
-            letterSpacing: '0.2em', textTransform: 'uppercase',
-          }}>
-            Reconnecting...
-          </p>
-        </div>
-      )}
       <audio
         ref={audioRef}
         src="/OrangeArenaPulse.mp3"
         preload="auto"
       />
-
     </>
   )
 }
