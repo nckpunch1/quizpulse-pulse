@@ -828,11 +828,15 @@ function PrizeDropDisplay({ phase, prizes, prizeName }) {
         pointerEvents: 'none', zIndex: 1,
       }} />
 
-      {/* Screen flash on reveal */}
+      {/* Screen flash on reveal. Resting state is explicitly transparent: with
+          no fill mode this reverts to the base style once the 0.4s run ends,
+          and 'revealing' lasts 700ms — so an unstyled base left this
+          full-screen div sitting solid orange for the remaining 300ms. */}
       {animPhase === 'revealing' && (
         <div style={{
           position: 'absolute', inset: 0,
           background: '#f97316',
+          opacity: 0,
           animation: 'screenFlash 0.4s ease',
           zIndex: 2, pointerEvents: 'none',
         }} />
@@ -1068,19 +1072,36 @@ function CrocodileTheatreDisplay({ teams, revealedCount, timerStartedAt, timerDu
   }, [])
 
   const hasTimer = !!timerStartedAt
+  const duration = timerDuration ?? 60000
 
   // Local tick that drives re-render ONLY while a timer is running. `now` is
   // read fresh here, so a mid-countdown reload lands at the right remaining
   // time rather than restarting at 60. Nothing is written on expiry.
+  //
+  // Self-rescheduling rather than a fixed interval, so the cadence can change
+  // and the loop can stop outright: 1Hz while only whole seconds are on screen,
+  // 100ms through the final 10s where tenths are, and nothing at all once
+  // expired — 'ВРЕМЯ!' is static, and the old interval re-rendered the whole
+  // tree behind it at 10Hz for as long as the host left the game up.
+  //
+  // The last slow tick is shortened to land exactly on the 10s boundary, so
+  // tenths are already ticking at 100ms the first frame they appear rather than
+  // starting jumpy or a beat late.
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     if (!hasTimer) return
-    setNow(Date.now())
-    const id = setInterval(() => setNow(Date.now()), 100)
-    return () => clearInterval(id)
-  }, [hasTimer, timerStartedAt])
+    let id
+    const tick = () => {
+      const t = Date.now()
+      setNow(t)
+      const left = duration - ((t + serverOffset) - timerStartedAt)
+      if (left <= 0) return
+      id = setTimeout(tick, left > 10000 ? Math.min(1000, left - 10000) : 100)
+    }
+    tick()
+    return () => clearTimeout(id)
+  }, [hasTimer, timerStartedAt, duration, serverOffset])
 
-  const duration = timerDuration ?? 60000
   const remaining = hasTimer
     ? Math.max(0, duration - ((now + serverOffset) - timerStartedAt))
     : 0
@@ -1317,12 +1338,15 @@ function BlitzPulsePrizeReveal({ prizeName }) {
   return (
     <>
       {/* Flash on the reveal beat, same 700ms transient window Prize Drop uses.
-          `forwards` keeps it settled on opacity 0 rather than snapping back to
-          the base style's solid orange. */}
+          Resting state is explicitly transparent: the keyframes only reach
+          opacity 0.15 at their midpoint, so an unstyled base would leave this
+          full-screen div solid orange on any frame the animation isn't driving
+          it. `forwards` then holds it there after the 0.4s run. */}
       {animPhase === 'revealing' && (
         <div style={{
           position: 'absolute', inset: 0,
           background: '#f97316',
+          opacity: 0,
           animation: 'screenFlash 0.4s ease forwards',
           zIndex: 2, pointerEvents: 'none',
         }} />
@@ -1931,9 +1955,6 @@ export default function Display() {
 
   const outcomeType = session?.outcomeType ?? session?.gameType ?? null
   const miniGame = session?.currentGame ?? session?.miniGame ?? null
-
-  console.log('session data:', session)
-  console.log('currentGame:', session?.currentGame)
 
   const landingTarget =
     outcomeType === 'blitz' ? 'SUDDEN DEATH BLITZ' :
