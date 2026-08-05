@@ -1783,6 +1783,7 @@ export default function Display() {
   const flatlineAudioRef = useRef(null)
   const beerAudioRef = useRef(null)
   const prizesAudioRef = useRef(null)
+  const blitzAudioRef = useRef(null)
   const [audioEnabled, setAudioEnabled] = useState(false)
   const [audioDismissed, setAudioDismissed] = useState(false)
 
@@ -1792,13 +1793,22 @@ export default function Display() {
     chargingAudioRef.current = new Audio('/Charging.mp3')
     chargingAudioRef.current.loop = true
 
+    // One-shot stings — deliberately NOT looped.
     successAudioRef.current = new Audio('/SuccessShock.mp3')
 
     flatlineAudioRef.current = new Audio('/Flatline.mp3')
 
+    // Background beds. These run for as long as their game is on screen, which
+    // outlasts the file every time, so they loop — otherwise the room falls
+    // silent partway through and the host has no way to restart it.
     beerAudioRef.current = new Audio('/Beer.mp3')
+    beerAudioRef.current.loop = true
 
     prizesAudioRef.current = new Audio('/prizes.mp3')
+    prizesAudioRef.current.loop = true
+
+    blitzAudioRef.current = new Audio('/blitz.mp3')
+    blitzAudioRef.current.loop = true
 
     // Preload all
     ;[
@@ -1807,6 +1817,7 @@ export default function Display() {
       flatlineAudioRef,
       beerAudioRef,
       prizesAudioRef,
+      blitzAudioRef,
     ].forEach(ref => {
       ref.current.preload = 'auto'
       ref.current.load()
@@ -1819,6 +1830,7 @@ export default function Display() {
         flatlineAudioRef,
         beerAudioRef,
         prizesAudioRef,
+        blitzAudioRef,
       ].forEach(ref => {
         if (!ref.current) return
         ref.current.pause()
@@ -1953,6 +1965,28 @@ export default function Display() {
     audioEnabled,
   ])
 
+  // BlitzPulse background bed. Kept in its own effect, keyed on the game type
+  // alone, because BlitzPulse rewrites `phase` on every team drawn — running
+  // this off the effect above (which depends on `phase`) would restart the
+  // track from the top each round instead of letting it loop through the game.
+  // Gated on audioEnabled like every other track, so before the 🔊 chip is
+  // used BlitzPulse simply runs silently.
+  useEffect(() => {
+    if (!audioEnabled) return
+
+    const blitz = blitzAudioRef.current
+    if (!blitz) return
+
+    if (currentGame?.type === 'blitz_pulse') {
+      // Only start if it isn't already running, so a re-render mid-game
+      // doesn't restart the bed.
+      if (blitz.paused) blitz.play().catch(console.error)
+    } else {
+      blitz.pause()
+      blitz.currentTime = 0
+    }
+  }, [currentGame?.type, audioEnabled])
+
   const outcomeType = session?.outcomeType ?? session?.gameType ?? null
   const miniGame = session?.currentGame ?? session?.miniGame ?? null
 
@@ -1971,6 +2005,7 @@ export default function Display() {
       flatlineAudioRef,
       beerAudioRef,
       prizesAudioRef,
+      blitzAudioRef,
     ]
     await Promise.all(allRefs.map(ref => {
       if (!ref.current) return Promise.resolve()
@@ -2236,10 +2271,13 @@ export default function Display() {
   return withOverlays(
     <>
       {screen}
+      {/* Looped: the bed plays for the whole live session, far longer than the
+          file, and nothing restarts it when it ends. */}
       <audio
         ref={audioRef}
         src="/OrangeArenaPulse.mp3"
         preload="auto"
+        loop
       />
     </>
   )
