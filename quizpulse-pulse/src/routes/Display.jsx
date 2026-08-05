@@ -1935,7 +1935,8 @@ export default function Display() {
     const type = currentGame?.type
       ?? session?.miniGame?.type
 
-    // Stop both first
+    // Stop both first. Safe to rewind unconditionally because this effect only
+    // re-runs when the game itself changes, never mid-game — see the deps note.
     beer.pause()
     beer.currentTime = 0
     prizes.pause()
@@ -1949,17 +1950,21 @@ export default function Display() {
 
     // Handle both 'prize_drop' and 'prize' type names
     if (type === 'prize_drop' || type === 'prize') {
-      // Only start if not already playing —
-      // prevents restart on each drop
       if (prizes.paused) {
         prizes.play().catch(console.error)
       }
       return
     }
 
+    // `currentGame.phase` is deliberately NOT a dependency. The body never
+    // reads it, and fireNextPrizeDrop rewrites phase on every drop — so having
+    // it here re-ran the whole effect mid-game, and the unconditional rewind
+    // above restarted prizes.mp3 from zero on each drop. (The `prizes.paused`
+    // guard could never prevent that: the pause two lines earlier always made
+    // it true.) startedAt stays, since it changes only when a genuinely new
+    // game is triggered — which should restart the bed.
   }, [
     currentGame?.type,
-    currentGame?.phase,
     currentGame?.startedAt,
     session?.miniGame?.type,
     audioEnabled,
