@@ -1697,6 +1697,218 @@ function BlitzPulseDisplay({ currentGame }) {
   )
 }
 
+// ─── Music Bingo ──────────────────────────────────────────────────────────────
+
+const BINGO_ROUND_LABELS = {
+  line: 'Line',
+  two_lines: 'Two Lines',
+  full_house: 'Full House',
+}
+
+// Housie board plus a branded Now Playing card. Board layout and the
+// called/last-called visual language are ported from the standalone Encore
+// display (admin-host EncoreDisplay.jsx) — that game keeps running unchanged;
+// this is an independent copy reading a different database.
+//
+// Read-only, like every renderer here: the host writes each call, this reacts.
+// Everything it needs is in currentGame, because the display app has no
+// Firestore to look a song pack up in.
+function MusicBingoDisplay({ currentGame }) {
+  const songs = currentGame?.songs ?? []
+  const calledNumbers = currentGame?.calledNumbers ?? {}
+  const lastCalled = currentGame?.lastCalled ?? null
+  const roundLabel = BINGO_ROUND_LABELS[currentGame?.roundType] ?? 'Line'
+  const songByNumber = Object.fromEntries(songs.map(s => [s.number, s]))
+  const calledCount = Object.keys(calledNumbers).length
+
+  return (
+    <div style={{
+      ...font, height: '100vh', background: '#0a0a0a',
+      padding: '2vh 2vw', display: 'flex', flexDirection: 'column', gap: '2vh',
+      overflow: 'hidden',
+    }}>
+      <style>{`
+        @keyframes bingoSlam {
+          from { transform: scale(1.25); opacity: 0; }
+          to { transform: scale(1); opacity: 1; }
+        }
+        @keyframes bingoElectric {
+          0%,100% { opacity: 0.85 } 10% { opacity: 0.35 } 12% { opacity: 1 } 50% { opacity: 0.7 } 52% { opacity: 1 }
+        }
+      `}</style>
+
+      {/* Header — brand left, what they're playing for right */}
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '2vw' }}>
+        <p style={{
+          color: '#f97316', fontWeight: 900,
+          fontSize: 'clamp(1rem,2vw,2rem)', letterSpacing: '0.3em',
+          textTransform: 'uppercase', margin: 0,
+        }}>
+          🎵 Music Bingo
+        </p>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '1.5vw' }}>
+          <p style={{
+            color: '#555', fontWeight: 700, fontSize: 'clamp(0.6rem,1vw,1rem)',
+            letterSpacing: '0.2em', textTransform: 'uppercase', margin: 0,
+          }}>
+            {calledCount} called
+          </p>
+          <p style={{
+            color: '#ffffff', fontWeight: 900, fontSize: 'clamp(0.9rem,1.8vw,1.8rem)',
+            letterSpacing: '0.15em', textTransform: 'uppercase', margin: 0,
+          }}>
+            Playing for <span style={{ color: '#f97316' }}>{roundLabel}</span>
+          </p>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: '2vw', flex: 1, minHeight: 0 }}>
+        {/* Board — 9 columns of 5, matching the printed cards */}
+        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(9, 1fr)', gap: '0.5vw' }}>
+          {[...Array(9)].map((_, col) => {
+            const rangeStart = col * 5 + 1
+            return (
+              <div key={col} style={{ display: 'flex', flexDirection: 'column', gap: '0.5vw' }}>
+                <div style={{
+                  textAlign: 'center', padding: '0.4vh 0', color: '#666',
+                  fontWeight: 800, fontSize: 'clamp(0.5rem,0.9vw,1rem)', letterSpacing: '0.1em',
+                }}>
+                  {rangeStart}–{rangeStart + 4}
+                </div>
+                {[...Array(5)].map((_, i) => {
+                  const number = rangeStart + i
+                  const song = songByNumber[number]
+                  const isCalled = !!calledNumbers[number]
+                  const isLast = lastCalled?.number === number
+                  const isPulse = song?.isPulseSong
+
+                  return (
+                    <div key={number} style={{
+                      flex: 1, borderRadius: 8,
+                      border: isLast
+                        ? '2px solid #f97316'
+                        : isPulse && isCalled
+                          ? '1px solid rgba(249,115,22,0.6)'
+                          : isCalled
+                            ? '1px solid rgba(255,255,255,0.2)'
+                            : '1px solid rgba(255,255,255,0.06)',
+                      background: isLast
+                        ? 'rgba(249,115,22,0.25)'
+                        : isPulse && isCalled
+                          ? 'rgba(249,115,22,0.15)'
+                          : isCalled
+                            ? 'rgba(255,255,255,0.1)'
+                            : 'rgba(255,255,255,0.03)',
+                      padding: '0.6vh 0.3vw',
+                      display: 'flex', flexDirection: 'column',
+                      alignItems: 'center', justifyContent: 'center',
+                      textAlign: 'center', minHeight: 0,
+                      animation: isLast ? 'bingoSlam 0.4s cubic-bezier(0.16,1,0.3,1)' : 'none',
+                      transition: 'all 0.3s ease',
+                    }}>
+                      {song ? (
+                        isCalled ? (
+                          <>
+                            <span style={{
+                              fontSize: 'clamp(0.4rem,0.6vw,0.75rem)',
+                              color: isLast ? '#f97316' : '#888', fontWeight: 600,
+                            }}>{number}</span>
+                            {isPulse && (
+                              <span style={{
+                                fontSize: 'clamp(0.5rem,0.7vw,0.8rem)',
+                                animation: 'bingoElectric 1s ease-in-out infinite',
+                              }}>⚡</span>
+                            )}
+                            <p style={{
+                              fontSize: 'clamp(0.45rem,0.72vw,0.85rem)', fontWeight: 800,
+                              color: isLast ? '#f97316' : '#fff', lineHeight: 1.15,
+                              margin: '2px 0 0', wordBreak: 'break-word',
+                            }}>
+                              {song.title}
+                            </p>
+                          </>
+                        ) : (
+                          <span style={{
+                            fontSize: 'clamp(0.9rem,1.7vw,2.1rem)', fontWeight: 900,
+                            color: 'rgba(255,255,255,0.15)',
+                          }}>
+                            {number}
+                          </span>
+                        )
+                      ) : null}
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Now Playing — text only, PulseIQ styling, no artwork */}
+        <div style={{
+          width: '22vw', borderRadius: 16, padding: '3vh 1.8vw',
+          display: 'flex', flexDirection: 'column',
+          background: lastCalled?.isPulseSong ? 'rgba(249,115,22,0.15)' : 'rgba(255,255,255,0.05)',
+          border: lastCalled?.isPulseSong ? '1px solid rgba(249,115,22,0.5)' : '1px solid rgba(255,255,255,0.08)',
+        }}>
+          <p style={{
+            color: '#555', fontWeight: 700, fontSize: 'clamp(0.6rem,1vw,1rem)',
+            letterSpacing: '0.25em', textTransform: 'uppercase', margin: '0 0 2vh',
+          }}>
+            Now Playing
+          </p>
+
+          {lastCalled ? (
+            <div key={lastCalled.calledAt} style={{ animation: 'bingoSlam 0.45s cubic-bezier(0.16,1,0.3,1)' }}>
+              {lastCalled.isPulseSong && (
+                <p style={{
+                  color: '#f97316', fontWeight: 900, fontSize: 'clamp(0.8rem,1.4vw,1.6rem)',
+                  letterSpacing: '0.2em', margin: '0 0 1vh',
+                  animation: 'bingoElectric 0.8s ease-in-out infinite',
+                }}>
+                  ⚡ PULSE SONG!
+                </p>
+              )}
+              <p style={{
+                color: '#666', fontWeight: 600,
+                fontSize: 'clamp(1rem,2vw,2.5rem)', lineHeight: 1, margin: 0,
+              }}>
+                #{lastCalled.number}
+              </p>
+              <p style={{
+                color: '#ffffff', fontWeight: 900,
+                fontSize: 'clamp(1.2rem,2.6vw,3.2rem)', lineHeight: 1.05,
+                margin: '1vh 0', wordBreak: 'break-word',
+              }}>
+                {lastCalled.title}
+              </p>
+              <p style={{
+                color: '#999', fontWeight: 700,
+                fontSize: 'clamp(0.8rem,1.5vw,1.9rem)', margin: 0, wordBreak: 'break-word',
+              }}>
+                {lastCalled.artist}
+              </p>
+            </div>
+          ) : (
+            <p style={{ color: '#333', fontWeight: 600, fontSize: 'clamp(0.8rem,1.2vw,1.4rem)' }}>
+              Waiting for the first song…
+            </p>
+          )}
+
+          <div style={{ flex: 1 }} />
+
+          <p style={{
+            color: '#444', fontWeight: 700, fontSize: 'clamp(0.55rem,0.9vw,0.95rem)',
+            letterSpacing: '0.2em', textTransform: 'uppercase', margin: 0,
+          }}>
+            PulseIQ
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Always-on overlays ───────────────────────────────────────────────────────
 // Both of these render above whatever the dispatch below returns. They used to
 // live in the main return, which put them behind six game-renderer early
@@ -1784,6 +1996,12 @@ export default function Display() {
   const beerAudioRef = useRef(null)
   const prizesAudioRef = useRef(null)
   const blitzAudioRef = useRef(null)
+  // Music Bingo clips. Unlike every other ref here this one has no fixed file —
+  // its src is swapped per called song. It is still created and primed with the
+  // others so the audio-unlock gesture covers it; an empty-src element primes
+  // fine and can be re-sourced afterwards.
+  const clipAudioRef = useRef(null)
+  const lastClipAtRef = useRef(null)
   const [audioEnabled, setAudioEnabled] = useState(false)
   const [audioDismissed, setAudioDismissed] = useState(false)
 
@@ -1810,6 +2028,10 @@ export default function Display() {
     blitzAudioRef.current = new Audio('/blitz.mp3')
     blitzAudioRef.current.loop = true
 
+    // Song hooks are ~30-45s and must not loop: the clip ends, the room talks,
+    // the host calls the next one.
+    clipAudioRef.current = new Audio()
+
     // Preload all
     ;[
       chargingAudioRef,
@@ -1831,6 +2053,7 @@ export default function Display() {
         beerAudioRef,
         prizesAudioRef,
         blitzAudioRef,
+        clipAudioRef,
       ].forEach(ref => {
         if (!ref.current) return
         ref.current.pause()
@@ -1866,7 +2089,9 @@ export default function Display() {
       session?.miniGame?.type === 'beer' ||
       currentGame?.type === 'prize_drop' ||
       currentGame?.type === 'prize' ||
-      session?.miniGame?.type === 'prize'
+      session?.miniGame?.type === 'prize' ||
+      // The song clip IS the game — the arena bed would play straight over it.
+      currentGame?.type === 'music_bingo'
 
     if (sessionIsLive && audioEnabled && !muteBackground) {
       if (audio.paused) {
@@ -1992,6 +2217,58 @@ export default function Display() {
     }
   }, [currentGame?.type, audioEnabled])
 
+  // Music Bingo clip playback.
+  //
+  // Keyed on lastCalled.calledAt, never on the song number or the payload
+  // object: RTDB hands this component a fresh object on every write to the
+  // session, so an effect keyed on anything else would restart the clip from
+  // zero each time an unrelated field changed. calledAt is a host-written
+  // timestamp that moves only on a real call — the same idiom prize drop uses
+  // with dropStartedAt. lastClipAtRef makes the guard survive a remount, which
+  // a re-render of the parent would otherwise defeat.
+  const clipCalledAt = currentGame?.type === 'music_bingo'
+    ? currentGame?.lastCalled?.calledAt ?? null
+    : null
+  const clipUrl = currentGame?.lastCalled?.clipUrl ?? null
+
+  useEffect(() => {
+    const clip = clipAudioRef.current
+    if (!clip) return
+
+    // No call yet, or the round ended / was uncalled — stop whatever is playing.
+    if (!clipCalledAt) {
+      clip.pause()
+      lastClipAtRef.current = null
+      return
+    }
+    // Already played this exact call. A re-render must not restart it.
+    if (lastClipAtRef.current === clipCalledAt) return
+    lastClipAtRef.current = clipCalledAt
+
+    // A song with no clip is not an error: the board still marks and the Now
+    // Playing card still shows. Stop the previous clip so the room isn't left
+    // hearing the last song over this one.
+    if (!clipUrl) {
+      clip.pause()
+      console.warn('[display] music_bingo: called song has no clipUrl — showing card without audio')
+      return
+    }
+    // Audio locked (host never clicked the unlock chip). Nothing to play, but
+    // the call is still recorded above so the clip won't retro-fire on unlock.
+    if (!audioEnabled) {
+      console.warn('[display] music_bingo: audio not unlocked — clip skipped')
+      return
+    }
+
+    clip.pause()
+    clip.src = clipUrl
+    clip.currentTime = 0
+    clip.play().catch((err) => {
+      // A dead URL or an unsupported codec must not take the board down.
+      console.error('[display] music_bingo: clip failed to play', err?.message ?? err)
+    })
+  }, [clipCalledAt, clipUrl, audioEnabled])
+
   const outcomeType = session?.outcomeType ?? session?.gameType ?? null
   const miniGame = session?.currentGame ?? session?.miniGame ?? null
 
@@ -2011,6 +2288,10 @@ export default function Display() {
       beerAudioRef,
       prizesAudioRef,
       blitzAudioRef,
+      // Primed with an empty src on purpose: the play() below fails immediately
+      // and harmlessly, but the element has still been touched inside the user
+      // gesture, which is what unlocks it for the per-song src set later.
+      clipAudioRef,
     ]
     await Promise.all(allRefs.map(ref => {
       if (!ref.current) return Promise.resolve()
@@ -2250,6 +2531,17 @@ export default function Display() {
   if (currentGame?.type === 'blitz_pulse') {
     return withOverlays(
       <BlitzPulseDisplay
+        currentGame={currentGame}
+        key={currentGame.startedAt}
+      />
+    )
+  }
+
+  if (currentGame?.type === 'music_bingo') {
+    // Keyed on startedAt, not on lastCalled: remounting per call would restart
+    // the board's entrance animation on every song.
+    return withOverlays(
+      <MusicBingoDisplay
         currentGame={currentGame}
         key={currentGame.startedAt}
       />
