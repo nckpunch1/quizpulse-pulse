@@ -1713,10 +1713,33 @@ const BINGO_ROUND_LABELS = {
 // Read-only, like every renderer here: the host writes each call, this reacts.
 // Everything it needs is in currentGame, because the display app has no
 // Firestore to look a song pack up in.
+// The ONE place that decides whether the Now Playing title/artist is visible.
+// Everything else in the display just asks this.
+//
+// Today it is purely host-controlled: the host taps Reveal, revealBingoSong
+// writes lastCalled.revealed, and the title appears. Each new call arrives with
+// revealed:false, so every song starts hidden.
+//
+// AUTO-TIMER HOOK: to reveal automatically N seconds after the call, this is
+// the only function that changes — tick an interval here while the song is
+// unrevealed and OR the host flag with `Date.now() - lastCalled.calledAt >=
+// AUTO_REVEAL_MS`. It is a hook rather than a plain predicate precisely so a
+// timer can drive that re-render from inside without touching any call site.
+// The host write stays authoritative either way: a host reveal wins early.
+//
+// That stays within this app's read-only rule. The timer would be animation
+// timing derived from a host-written payload timestamp (calledAt) deciding
+// what to RENDER — never a write, and never a state transition; the reveal
+// still exists in RTDB only when the host puts it there.
+function useTitleRevealed(lastCalled) {
+  return lastCalled?.revealed === true
+}
+
 function MusicBingoDisplay({ currentGame }) {
   const songs = currentGame?.songs ?? []
   const calledNumbers = currentGame?.calledNumbers ?? {}
   const lastCalled = currentGame?.lastCalled ?? null
+  const titleRevealed = useTitleRevealed(lastCalled)
   const roundLabel = BINGO_ROUND_LABELS[currentGame?.roundType] ?? 'Line'
   const songByNumber = Object.fromEntries(songs.map(s => [s.number, s]))
   const calledCount = Object.keys(calledNumbers).length
@@ -1734,6 +1757,13 @@ function MusicBingoDisplay({ currentGame }) {
         }
         @keyframes bingoElectric {
           0%,100% { opacity: 0.85 } 10% { opacity: 0.35 } 12% { opacity: 1 } 50% { opacity: 0.7 } 52% { opacity: 1 }
+        }
+        @keyframes bingoReveal {
+          from { opacity: 0; transform: translateY(0.8vh); }
+          to { opacity: 1; transform: none; }
+        }
+        @keyframes bingoGuessPulse {
+          0%,100% { opacity: 0.55 } 50% { opacity: 1 }
         }
       `}</style>
 
@@ -1807,34 +1837,35 @@ function MusicBingoDisplay({ currentGame }) {
                       transition: 'all 0.3s ease',
                     }}>
                       {song ? (
-                        isCalled ? (
-                          <>
-                            <span style={{
-                              fontSize: 'clamp(0.4rem,0.6vw,0.75rem)',
-                              color: isLast ? '#f97316' : '#888', fontWeight: 600,
-                            }}>{number}</span>
-                            {isPulse && (
-                              <span style={{
-                                fontSize: 'clamp(0.5rem,0.7vw,0.8rem)',
-                                animation: 'bingoElectric 1s ease-in-out infinite',
-                              }}>⚡</span>
-                            )}
-                            <p style={{
-                              fontSize: 'clamp(0.45rem,0.72vw,0.85rem)', fontWeight: 800,
-                              color: isLast ? '#f97316' : '#fff', lineHeight: 1.15,
-                              margin: '2px 0 0', wordBreak: 'break-word',
-                            }}>
-                              {song.title}
-                            </p>
-                          </>
-                        ) : (
+                        /* Numbers only — never the title.
+                           The board's job is to track WHICH numbers have been
+                           called so players can mark their printed cards. The
+                           title is the ANSWER, and it lives solely in the Now
+                           Playing panel, and only once the host reveals it.
+                           Printing titles here made the board a running answer
+                           key — the room read the current call off the orange
+                           cell and every past call off the rest — which
+                           defeated the guess-first reveal entirely.
+                           `number` is the shared key with the printed card:
+                           players hear the hook, find that title on their card,
+                           and the board confirms the call by number. */
+                        <>
                           <span style={{
                             fontSize: 'clamp(0.9rem,1.7vw,2.1rem)', fontWeight: 900,
-                            color: 'rgba(255,255,255,0.15)',
+                            lineHeight: 1,
+                            color: isCalled
+                              ? (isLast ? '#f97316' : '#ffffff')
+                              : 'rgba(255,255,255,0.15)',
                           }}>
                             {number}
                           </span>
-                        )
+                          {isPulse && isCalled && (
+                            <span style={{
+                              fontSize: 'clamp(0.5rem,0.7vw,0.8rem)',
+                              animation: 'bingoElectric 1s ease-in-out infinite',
+                            }}>⚡</span>
+                          )}
+                        </>
                       ) : null}
                     </div>
                   )
@@ -1875,19 +1906,45 @@ function MusicBingoDisplay({ currentGame }) {
               }}>
                 #{lastCalled.number}
               </p>
-              <p style={{
-                color: '#ffffff', fontWeight: 900,
-                fontSize: 'clamp(1.2rem,2.6vw,3.2rem)', lineHeight: 1.05,
-                margin: '1vh 0', wordBreak: 'break-word',
-              }}>
-                {lastCalled.title}
-              </p>
-              <p style={{
-                color: '#999', fontWeight: 700,
-                fontSize: 'clamp(0.8rem,1.5vw,1.9rem)', margin: 0, wordBreak: 'break-word',
-              }}>
-                {lastCalled.artist}
-              </p>
+              {/* The guess-first bit. Until the host reveals, the number and
+                  the pulse badge are all the room gets — no title, no artist.
+                  lastCalled still carries both for win verification; they are
+                  simply not rendered. */}
+              {titleRevealed ? (
+                <div style={{ animation: 'bingoReveal 0.4s cubic-bezier(0.16,1,0.3,1)' }}>
+                  <p style={{
+                    color: '#ffffff', fontWeight: 900,
+                    fontSize: 'clamp(1.2rem,2.6vw,3.2rem)', lineHeight: 1.05,
+                    margin: '1vh 0', wordBreak: 'break-word',
+                  }}>
+                    {lastCalled.title}
+                  </p>
+                  <p style={{
+                    color: '#999', fontWeight: 700,
+                    fontSize: 'clamp(0.8rem,1.5vw,1.9rem)', margin: 0, wordBreak: 'break-word',
+                  }}>
+                    {lastCalled.artist}
+                  </p>
+                </div>
+              ) : (
+                <div style={{ margin: '1vh 0' }}>
+                  <p style={{
+                    color: '#f97316', fontWeight: 900,
+                    fontSize: 'clamp(1.2rem,2.6vw,3.2rem)', lineHeight: 1.05,
+                    margin: 0, letterSpacing: '0.02em',
+                    animation: 'bingoGuessPulse 2s ease-in-out infinite',
+                  }}>
+                    🎵 Name that tune!
+                  </p>
+                  <p style={{
+                    color: '#666', fontWeight: 700,
+                    fontSize: 'clamp(0.7rem,1.3vw,1.6rem)', margin: '1vh 0 0',
+                    letterSpacing: '0.12em', textTransform: 'uppercase',
+                  }}>
+                    Mark your card
+                  </p>
+                </div>
+              )}
             </div>
           ) : (
             <p style={{ color: '#333', fontWeight: 600, fontSize: 'clamp(0.8rem,1.2vw,1.4rem)' }}>
