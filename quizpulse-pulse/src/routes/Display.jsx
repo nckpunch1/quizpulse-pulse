@@ -1837,42 +1837,35 @@ function MusicBingoDisplay({ currentGame }) {
                       transition: 'all 0.3s ease',
                     }}>
                       {song ? (
-                        isCalled ? (
-                          /* NOTE: this cell prints song.title for every called
-                             number, including the one just called (isLast).
-                             So while useTitleRevealed hides the Now Playing
-                             title, the board still shows it — the room can read
-                             the answer off the grid. Left as-is deliberately:
-                             changing the board was out of scope for the reveal
-                             work. To close it, gate this <p> on the same
-                             titleRevealed flag when isLast. */
-                          <>
-                            <span style={{
-                              fontSize: 'clamp(0.4rem,0.6vw,0.75rem)',
-                              color: isLast ? '#f97316' : '#888', fontWeight: 600,
-                            }}>{number}</span>
-                            {isPulse && (
-                              <span style={{
-                                fontSize: 'clamp(0.5rem,0.7vw,0.8rem)',
-                                animation: 'bingoElectric 1s ease-in-out infinite',
-                              }}>⚡</span>
-                            )}
-                            <p style={{
-                              fontSize: 'clamp(0.45rem,0.72vw,0.85rem)', fontWeight: 800,
-                              color: isLast ? '#f97316' : '#fff', lineHeight: 1.15,
-                              margin: '2px 0 0', wordBreak: 'break-word',
-                            }}>
-                              {song.title}
-                            </p>
-                          </>
-                        ) : (
+                        /* Numbers only — never the title.
+                           The board's job is to track WHICH numbers have been
+                           called so players can mark their printed cards. The
+                           title is the ANSWER, and it lives solely in the Now
+                           Playing panel, and only once the host reveals it.
+                           Printing titles here made the board a running answer
+                           key — the room read the current call off the orange
+                           cell and every past call off the rest — which
+                           defeated the guess-first reveal entirely.
+                           `number` is the shared key with the printed card:
+                           players hear the hook, find that title on their card,
+                           and the board confirms the call by number. */
+                        <>
                           <span style={{
                             fontSize: 'clamp(0.9rem,1.7vw,2.1rem)', fontWeight: 900,
-                            color: 'rgba(255,255,255,0.15)',
+                            lineHeight: 1,
+                            color: isCalled
+                              ? (isLast ? '#f97316' : '#ffffff')
+                              : 'rgba(255,255,255,0.15)',
                           }}>
                             {number}
                           </span>
-                        )
+                          {isPulse && isCalled && (
+                            <span style={{
+                              fontSize: 'clamp(0.5rem,0.7vw,0.8rem)',
+                              animation: 'bingoElectric 1s ease-in-out infinite',
+                            }}>⚡</span>
+                          )}
+                        </>
                       ) : null}
                     </div>
                   )
