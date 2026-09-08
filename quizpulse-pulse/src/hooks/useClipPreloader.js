@@ -192,29 +192,25 @@ export function useClipPreloader(urls) {
     return entry.el
   }
 
-  // Called from inside the audio-unlock gesture. Touching each element with a
-  // play() there is what unlocks it on browsers that gate per element rather
-  // than per document. Volume is dropped first so 48 elements starting at once
-  // cannot make a noise, and restored after.
+  // Hands every clip element that currently exists to `visit`, each inside its
+  // own try/catch.
   //
-  // Race-free by construction: the unlock chip only exists while audio is
-  // locked, and while audio is locked no clip can be playing, so nothing here
-  // can pause a clip the room is listening to.
-  const primeForUnlock = () => {
-    entriesRef.current.forEach(({ el }) => {
-      if (!el) return
-      const volume = el.volume
-      el.volume = 0
-      const played = el.play()
-      const restore = () => { el.volume = volume }
-      if (!played?.then) { el.pause(); restore(); return }
-      played
-        .then(() => {
-          el.pause()
-          try { el.currentTime = 0 } catch { /* not seekable yet; harmless */ }
-        })
-        .catch(() => { /* still locked, or not loaded yet — the caller falls back */ })
-        .finally(restore)
+  // The isolation is the entire point. This is called from the audio-unlock
+  // gesture, and a throw from one dead element used to escape all the way out
+  // of that handler and abandon the unlock — which killed the background beds
+  // and stings too, since they are gated on the same flag. One bad element is
+  // allowed to miss its turn and nothing else.
+  //
+  // What priming means is deliberately NOT decided here: Display owns one
+  // definition of it and applies it to the fixed sounds and these clips alike.
+  const forEachClipElement = (visit) => {
+    entriesRef.current.forEach((entry) => {
+      if (!entry?.el) return
+      try {
+        visit(entry.el)
+      } catch (err) {
+        console.warn('[display] music_bingo: clip element refused priming', err?.message ?? err)
+      }
     })
   }
 
@@ -228,7 +224,7 @@ export function useClipPreloader(urls) {
     // train them to ignore the indicator.
     done: total > 0 && ready + failed >= total,
     getClipElement,
-    primeForUnlock,
+    forEachClipElement,
   }
 }
 

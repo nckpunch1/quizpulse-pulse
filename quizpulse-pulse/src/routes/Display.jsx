@@ -2508,35 +2508,70 @@ export default function Display() {
 
   const revealFrame = useRevealAnimation(state, landingTarget, teams)
 
-  const enableAudio = async () => {
-    const allRefs = [
-      audioRef,
-      chargingAudioRef,
-      successAudioRef,
-      flatlineAudioRef,
-      beerAudioRef,
-      prizesAudioRef,
-      blitzAudioRef,
-      // Primed with an empty src on purpose: the play() below fails immediately
-      // and harmlessly, but the element has still been touched inside the user
-      // gesture, which is what unlocks it for the per-song src set later.
-      clipAudioRef,
-    ]
-    await Promise.all(allRefs.map(ref => {
-      if (!ref.current) return Promise.resolve()
-      return ref.current.play()
-        .then(() => {
-          ref.current.pause()
-          ref.current.currentTime = 0
-        })
-        .catch(() => {})
-    }))
-    // Same gesture, same purpose, for the round's preloaded clip elements: they
-    // hold their own audio and are played directly, so each one needs the touch
-    // the shared element above just got. Silent, and safe here because no clip
-    // can be playing while audio is still locked.
-    clipPreload.primeForUnlock()
-    setAudioEnabled(true)
+  // Unlocking one element: play it and stop it again, inside the gesture, which
+  // is what tells the browser this audio was asked for by a person.
+  //
+  // Entirely synchronous, and that is not incidental:
+  //  · play() and pause() in the same tick means the element can never be left
+  //    running. The previous version paused inside .then(), so an element whose
+  //    play() promise resolved late — or never, which is what a still-buffering
+  //    element does — stayed silently "playing", holding an output stream and
+  //    stuck at the volume 0 it was primed with.
+  //  · the volume restore happens in a finally on this tick rather than on a
+  //    promise that may not settle.
+  //  · nothing here can suspend the caller, so the unlock cannot hang partway.
+  //
+  // Every failure is contained: a throw is swallowed, a rejected play() is
+  // handled before pause() can turn it into an AbortError nobody caught. One
+  // element that refuses to prime costs that element and nothing else.
+  const primeElement = (el) => {
+    if (!el) return
+    const volume = el.volume
+    try {
+      el.volume = 0
+      const played = el.play()
+      // Attached before the pause, because pausing a pending play() rejects it.
+      if (played?.catch) played.catch(() => {})
+      el.pause()
+      el.currentTime = 0
+    } catch {
+      // An empty src, a codec the browser will not take, an element the media
+      // stack has given up on. Silence for that one sound is the whole cost.
+    } finally {
+      el.volume = volume
+    }
+  }
+
+  const enableAudio = () => {
+    try {
+      ;[
+        audioRef,
+        chargingAudioRef,
+        successAudioRef,
+        flatlineAudioRef,
+        beerAudioRef,
+        prizesAudioRef,
+        blitzAudioRef,
+        // Primed with an empty src on purpose: the play() fails immediately and
+        // harmlessly, but the element has still been touched inside the user
+        // gesture, which is what unlocks it for the per-song src set later.
+        clipAudioRef,
+      ].forEach((ref) => primeElement(ref.current))
+
+      // Same gesture, same treatment, for the round's preloaded clip elements:
+      // they hold their own audio and are played directly, so each one needs the
+      // touch the shared element just got.
+      clipPreload.forEachClipElement(primeElement)
+    } finally {
+      // Unconditional, and the reason this whole function is shaped the way it
+      // is. EVERY sound in this app — the arena bed, the Shock stings, the beer
+      // and prize beds, blitz, the bingo clips — is gated on this flag, so a
+      // single element failing to prime must never be able to leave it false.
+      // That is exactly what happened when priming the preloaded clips was
+      // added: one throw from one clip element aborted the handler here, and
+      // the room got no audio at all for the rest of the night.
+      setAudioEnabled(true)
+    }
   }
 
   // Every branch below returns through this, so the overlays stay reachable
