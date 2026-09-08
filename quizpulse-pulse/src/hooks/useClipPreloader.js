@@ -51,6 +51,15 @@ export function useClipPreloader(urls) {
   // it survives every re-render the RTDB feed causes, and nothing renders off
   // the elements themselves — only off the counts below.
   const entriesRef = useRef(new Map())
+  // The hidden host node the clip elements live in. A detached `new Audio()`
+  // plays perfectly well — every other sound on this display is one — so this
+  // is not what makes them audible. It is here so the round's audio can be
+  // INSPECTED: `document.querySelectorAll('audio[data-bingo-clip]')` from the
+  // venue laptop's console answers "did the clips actually load" in one line,
+  // which is otherwise unanswerable from outside this closure. It also keeps
+  // the elements reachable from the document while they hold ~30 MB, rather
+  // than alive only by virtue of a Map nobody can see.
+  const hostRef = useRef(null)
   // The set the callbacks below should be looking at. Kept in a ref, updated
   // inside the effect (never during render), because the event handlers that
   // finish a download outlive the render that started it.
@@ -69,6 +78,18 @@ export function useClipPreloader(urls) {
     const run = ++runRef.current
     const entries = entriesRef.current
     urlsRef.current = urls
+
+    // Created on first use rather than at mount, so a display that never runs a
+    // Music Bingo round never grows a node for it.
+    const mountNode = () => {
+      if (hostRef.current || typeof document === 'undefined') return hostRef.current
+      const node = document.createElement('div')
+      node.hidden = true
+      node.dataset.bingoClips = ''
+      document.body.appendChild(node)
+      hostRef.current = node
+      return node
+    }
 
     const publish = () => {
       const wanted = urlsRef.current
@@ -90,6 +111,11 @@ export function useClipPreloader(urls) {
     const start = (url) => {
       const el = new Audio()
       el.preload = 'auto'
+      // No `controls`, inside a hidden node: it renders nothing and the display
+      // is unchanged. Hidden media still plays — `display: none` does not stop
+      // or mute an audio element.
+      el.dataset.bingoClip = ''
+      mountNode()?.appendChild(el)
       const entry = { el, status: 'loading', detach: () => {}, timer: null }
       entries.set(url, entry)
 
@@ -175,9 +201,12 @@ export function useClipPreloader(urls) {
   // Release on unmount only. Every other path above keeps what it can.
   useEffect(() => {
     const entries = entriesRef.current
+    const host = hostRef
     return () => {
       entries.forEach(releaseEntry)
       entries.clear()
+      host.current?.remove()
+      host.current = null
     }
   }, [])
 
@@ -239,4 +268,5 @@ function releaseEntry(entry) {
   // and would send a pointless request for the document itself.
   el.removeAttribute('src')
   try { el.load() } catch { /* aborting a load that never started */ }
+  el.remove?.()
 }
