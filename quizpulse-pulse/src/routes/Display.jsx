@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { usePulseSession } from '@/hooks/usePulseSession'
+import { useClipPreloader } from '@/hooks/useClipPreloader'
 import { ref as rtdbRef, onValue } from 'firebase/database'
 import { db } from '@/lib/firebase'
 
@@ -1735,7 +1736,59 @@ function useTitleRevealed(lastCalled) {
   return lastCalled?.revealed === true
 }
 
-function MusicBingoDisplay({ currentGame }) {
+// Clip readiness, on screen.
+//
+// The host is the audience for this, not the room. They run the display from
+// the same laptop as the Host Console (window dragged to HDMI), and they are
+// the one who decides when calling starts — so what they need is to be able to
+// glance at the screen during the break and see whether the round's audio has
+// landed. It has to live here: this app is read-only with no auth, so it cannot
+// report anything back to the Host Console.
+//
+// Deliberately not a blocker. The host can start calling at any point; a song
+// whose clip has not arrived yet simply fetches on demand and lags the way
+// every song used to.
+function ClipLoadStatus({ preload, hasCalled }) {
+  const total = preload?.total ?? 0
+  if (!total) return null
+  const { ready = 0, failed = 0, done = false } = preload
+  // A finished preload stops being news once the round is under way. An
+  // unfinished one never does — stragglers are the thing worth knowing about.
+  if (done && hasCalled) return null
+
+  const settled = ready + failed
+  const allGood = done && failed === 0
+  const colour = allGood ? '#22c55e' : done ? '#f59e0b' : '#f97316'
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6vw' }}>
+      <p style={{
+        color: colour, fontWeight: 800, fontSize: 'clamp(0.6rem,1vw,1rem)',
+        letterSpacing: '0.2em', textTransform: 'uppercase', margin: 0,
+        whiteSpace: 'nowrap',
+      }}>
+        {allGood
+          ? `♪ Clips ready ${ready}/${total}`
+          : done
+            ? `♪ ${ready}/${total} ready · ${failed} unavailable`
+            : `Loading clips ${ready}/${total}`}
+      </p>
+      {!done && (
+        <div style={{
+          width: '6vw', height: '0.6vh', minHeight: 3, borderRadius: 999,
+          background: 'rgba(255,255,255,0.1)', overflow: 'hidden',
+        }}>
+          <div style={{
+            width: `${Math.round((settled / total) * 100)}%`, height: '100%',
+            background: '#f97316', transition: 'width 0.3s ease',
+          }} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MusicBingoDisplay({ currentGame, clipPreload }) {
   const songs = currentGame?.songs ?? []
   const calledNumbers = currentGame?.calledNumbers ?? {}
   const lastCalled = currentGame?.lastCalled ?? null
@@ -1780,7 +1833,8 @@ function MusicBingoDisplay({ currentGame }) {
         }}>
           🎵 Music Bingo
         </p>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '1.5vw' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5vw' }}>
+          <ClipLoadStatus preload={clipPreload} hasCalled={calledCount > 0} />
           <p style={{
             color: '#555', fontWeight: 700, fontSize: 'clamp(0.6rem,1vw,1rem)',
             letterSpacing: '0.2em', textTransform: 'uppercase', margin: 0,
@@ -1955,9 +2009,27 @@ function MusicBingoDisplay({ currentGame }) {
               )}
             </div>
           ) : (
-            <p style={{ color: '#333', fontWeight: 600, fontSize: 'clamp(0.8rem,1.2vw,1.4rem)' }}>
-              Waiting for the first song…
-            </p>
+            <div>
+              <p style={{ color: '#333', fontWeight: 600, fontSize: 'clamp(0.8rem,1.2vw,1.4rem)', margin: 0 }}>
+                Waiting for the first song…
+              </p>
+              {/* The break is when this matters, and this panel is empty for the
+                  whole of it — so the readiness that the host is waiting on gets
+                  said in full here, not just as the header chip. */}
+              {clipPreload?.total > 0 && (
+                <p style={{
+                  color: clipPreload.done ? '#22c55e' : '#f97316',
+                  fontWeight: 700, fontSize: 'clamp(0.7rem,1.1vw,1.3rem)',
+                  lineHeight: 1.4, margin: '2vh 0 0',
+                }}>
+                  {clipPreload.done
+                    ? (clipPreload.failed === 0
+                        ? '♪ All clips loaded — ready to call'
+                        : `♪ ${clipPreload.ready}/${clipPreload.total} clips loaded · ${clipPreload.failed} will load when called`)
+                    : `Loading clips… ${clipPreload.ready}/${clipPreload.total}`}
+                </p>
+              )}
+            </div>
           )}
 
           <div style={{ flex: 1 }} />
@@ -2308,13 +2380,43 @@ export default function Display() {
     ? (bingoGame?.tiebreaker?.url ?? null)
     : (bingoGame?.lastCalled?.clipUrl ?? null)
 
+  // Every clip the round can possibly need, downloaded up front during the
+  // pre-round break. Bingo calls at random, so there is no useful subset to
+  // preload — see useClipPreloader for the whole argument. Tiebreakers ride in
+  // the same pass: they are the same kind of file from the same bucket, and the
+  // moment the host wants one is the worst moment to start fetching it.
+  //
+  // Rebuilt on every RTDB write, which is free and, more to the point, safe: the
+  // hook keys on the joined URLs rather than on this array's identity, so an
+  // unrelated field changing does not restart a single download.
+  const bingoSongList = Array.isArray(bingoGame?.songs) ? bingoGame.songs : []
+  const bingoTiebreakerList = Array.isArray(bingoGame?.tiebreakers) ? bingoGame.tiebreakers : []
+  const clipUrls = [...new Set([
+    ...bingoSongList.map((s) => s?.clipUrl),
+    ...bingoTiebreakerList.map((t) => t?.url),
+  ].filter(Boolean))]
+
+  const clipPreload = useClipPreloader(clipUrls)
+
+  // Whichever element is currently sounding: a preloaded one, or the shared
+  // fallback. Held so the next call can silence it without having to know which
+  // of the two the previous call used.
+  const activeClipRef = useRef(null)
+
   useEffect(() => {
     const clip = clipAudioRef.current
     if (!clip) return
 
+    const stopActive = () => {
+      const el = activeClipRef.current
+      if (!el) return
+      el.pause()
+      activeClipRef.current = null
+    }
+
     // No call yet, or the round ended / was uncalled — stop whatever is playing.
     if (!clipCalledAt) {
-      clip.pause()
+      stopActive()
       lastClipAtRef.current = null
       return
     }
@@ -2325,7 +2427,7 @@ export default function Display() {
       // host ended a tiebreaker and the call underneath it resurfaced. Stop the
       // tiebreaker, but do not replay a song the room already heard.
       if (clipCalledAt < lastClipAtRef.current) {
-        clip.pause()
+        stopActive()
         lastClipAtRef.current = clipCalledAt
       }
       // Equal is just a re-render. Either way, nothing starts playing.
@@ -2337,7 +2439,7 @@ export default function Display() {
     // Playing card still shows. Stop the previous clip so the room isn't left
     // hearing the last song over this one.
     if (!clipUrl) {
-      clip.pause()
+      stopActive()
       console.warn('[display] music_bingo: trigger has no clip url — no audio for this one')
       return
     }
@@ -2348,13 +2450,52 @@ export default function Display() {
       return
     }
 
-    clip.pause()
-    clip.src = clipUrl
-    clip.currentTime = 0
-    clip.play().catch((err) => {
-      // A dead URL or an unsupported codec must not take the board down.
-      console.error('[display] music_bingo: clip failed to play', err?.message ?? err)
+    stopActive()
+
+    // The shared element, sourced on the spot. This is what every call used to
+    // do, and it is still the path for a clip the preload never got: a dead
+    // preload must cost that one song its old lag, not its audio.
+    const playOnDemand = () => {
+      clip.src = clipUrl
+      clip.currentTime = 0
+      activeClipRef.current = clip
+      clip.play().catch((err) => {
+        // A dead URL or an unsupported codec must not take the board down.
+        console.error('[display] music_bingo: clip failed to play', err?.message ?? err)
+      })
+    }
+
+    // The happy path: the element that already holds this file plays it, so the
+    // call sounds immediately instead of waiting on Storage.
+    const preloaded = clipPreload.getClipElement(clipUrl)
+    if (!preloaded) {
+      playOnDemand()
+      return
+    }
+    // Guarded: a preloaded element can still be at readyState 0 if the round was
+    // launched seconds ago, and a browser is within its rights to refuse the
+    // seek. Not being able to rewind is not a reason to drop the call.
+    try { preloaded.currentTime = 0 } catch { /* plays from the top anyway */ }
+    activeClipRef.current = preloaded
+    preloaded.play().catch((err) => {
+      // Two very different rejections arrive here. A newer trigger — the next
+      // song, or the same one re-called for a replay — pauses this element and
+      // rejects its pending play(); falling back then would drop the previous
+      // clip on top of the one the host just called. The trigger this run acted
+      // on still being the latest is the test for whether the rejection is
+      // ours to handle at all.
+      if (lastClipAtRef.current !== clipCalledAt) return
+      // The other one: a preloaded element created after the unlock gesture was
+      // never touched inside a gesture itself, and browsers that gate playback
+      // per element rather than per document refuse it. The shared element was
+      // unlocked, so the room still hears the song.
+      console.warn(
+        '[display] music_bingo: preloaded clip refused, falling back to on-demand',
+        err?.message ?? err
+      )
+      playOnDemand()
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- clipPreload is a stable accessor bag; re-running on it would replay the clip
   }, [clipCalledAt, clipUrl, audioEnabled])
 
   const outcomeType = session?.outcomeType ?? session?.gameType ?? null
@@ -2390,6 +2531,11 @@ export default function Display() {
         })
         .catch(() => {})
     }))
+    // Same gesture, same purpose, for the round's preloaded clip elements: they
+    // hold their own audio and are played directly, so each one needs the touch
+    // the shared element above just got. Silent, and safe here because no clip
+    // can be playing while audio is still locked.
+    clipPreload.primeForUnlock()
     setAudioEnabled(true)
   }
 
@@ -2631,6 +2777,7 @@ export default function Display() {
     return withOverlays(
       <MusicBingoDisplay
         currentGame={currentGame}
+        clipPreload={clipPreload}
         key={currentGame.startedAt}
       />
     )
