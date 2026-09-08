@@ -1741,6 +1741,10 @@ function MusicBingoDisplay({ currentGame }) {
   const lastCalled = currentGame?.lastCalled ?? null
   const titleRevealed = useTitleRevealed(lastCalled)
   const roundLabel = BINGO_ROUND_LABELS[currentGame?.roundType] ?? 'Line'
+  // A tiebreaker takes over the status line and nothing else: no title, no
+  // artist, no reveal. The board stays exactly as it was — the host announces
+  // and judges the whole thing live.
+  const tiebreakerActive = !!currentGame?.tiebreaker
   const songByNumber = Object.fromEntries(songs.map(s => [s.number, s]))
   const calledCount = Object.keys(calledNumbers).length
 
@@ -1787,7 +1791,11 @@ function MusicBingoDisplay({ currentGame }) {
             color: '#ffffff', fontWeight: 900, fontSize: 'clamp(0.9rem,1.8vw,1.8rem)',
             letterSpacing: '0.15em', textTransform: 'uppercase', margin: 0,
           }}>
-            Playing for <span style={{ color: '#f97316' }}>{roundLabel}</span>
+            {tiebreakerActive ? (
+              <span style={{ color: '#f59e0b' }}>Tie Breaker</span>
+            ) : (
+              <>Playing for <span style={{ color: '#f97316' }}>{roundLabel}</span></>
+            )}
           </p>
         </div>
       </div>
@@ -2276,17 +2284,29 @@ export default function Display() {
 
   // Music Bingo clip playback.
   //
-  // Keyed on lastCalled.calledAt, never on the song number or the payload
-  // object: RTDB hands this component a fresh object on every write to the
-  // session, so an effect keyed on anything else would restart the clip from
-  // zero each time an unrelated field changed. calledAt is a host-written
-  // timestamp that moves only on a real call — the same idiom prize drop uses
-  // with dropStartedAt. lastClipAtRef makes the guard survive a remount, which
-  // a re-render of the parent would otherwise defeat.
-  const clipCalledAt = currentGame?.type === 'music_bingo'
-    ? currentGame?.lastCalled?.calledAt ?? null
-    : null
-  const clipUrl = currentGame?.lastCalled?.clipUrl ?? null
+  // Keyed on the trigger's host-written timestamp, never on the song number or
+  // the payload object: RTDB hands this component a fresh object on every write
+  // to the session, so an effect keyed on anything else would restart the clip
+  // from zero each time an unrelated field changed. calledAt (and a
+  // tiebreaker's playedAt) moves only on a real host tap — the same idiom prize
+  // drop uses with dropStartedAt, and what makes re-tapping replay.
+  // lastClipAtRef makes the guard survive a remount, which a re-render of the
+  // parent would otherwise defeat.
+  //
+  // One clip channel, two possible triggers: a called song and a host-fired
+  // tiebreaker. The more recent host write wins, so firing a tiebreaker takes
+  // the channel from the song playing under it and calling the next song takes
+  // it back — they can never sound at once.
+  const bingoGame = currentGame?.type === 'music_bingo' ? currentGame : null
+  const calledAt = bingoGame?.lastCalled?.calledAt ?? null
+  const tiebreakerAt = bingoGame?.tiebreaker?.playedAt ?? null
+  const tiebreakerWins =
+    tiebreakerAt != null && (calledAt == null || tiebreakerAt >= calledAt)
+
+  const clipCalledAt = tiebreakerWins ? tiebreakerAt : calledAt
+  const clipUrl = tiebreakerWins
+    ? (bingoGame?.tiebreaker?.url ?? null)
+    : (bingoGame?.lastCalled?.clipUrl ?? null)
 
   useEffect(() => {
     const clip = clipAudioRef.current
@@ -2298,8 +2318,19 @@ export default function Display() {
       lastClipAtRef.current = null
       return
     }
-    // Already played this exact call. A re-render must not restart it.
-    if (lastClipAtRef.current === clipCalledAt) return
+    // Triggers only ever move forward, so anything not newer than what we last
+    // acted on has already been handled.
+    if (lastClipAtRef.current != null && clipCalledAt <= lastClipAtRef.current) {
+      // Strictly older means the channel fell BACK to an earlier trigger: the
+      // host ended a tiebreaker and the call underneath it resurfaced. Stop the
+      // tiebreaker, but do not replay a song the room already heard.
+      if (clipCalledAt < lastClipAtRef.current) {
+        clip.pause()
+        lastClipAtRef.current = clipCalledAt
+      }
+      // Equal is just a re-render. Either way, nothing starts playing.
+      return
+    }
     lastClipAtRef.current = clipCalledAt
 
     // A song with no clip is not an error: the board still marks and the Now
@@ -2307,7 +2338,7 @@ export default function Display() {
     // hearing the last song over this one.
     if (!clipUrl) {
       clip.pause()
-      console.warn('[display] music_bingo: called song has no clipUrl — showing card without audio')
+      console.warn('[display] music_bingo: trigger has no clip url — no audio for this one')
       return
     }
     // Audio locked (host never clicked the unlock chip). Nothing to play, but
