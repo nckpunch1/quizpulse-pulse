@@ -64,9 +64,22 @@ export function useClipPreloader(urls) {
   // inside the effect (never during render), because the event handlers that
   // finish a download outlive the render that started it.
   const urlsRef = useRef(urls)
-  // Bumped per url-set, so a pump left running for the previous pack stops
-  // starting downloads the moment a new one arrives.
-  const runRef = useRef(0)
+  // The pump belonging to the CURRENT url-set.
+  //
+  // Held in a ref because the run that STARTS a clip is not necessarily the run
+  // that is live when that clip finishes, and it is the live run that knows what
+  // still needs starting. This used to be a per-run counter guarding the pump
+  // body, which inverted the intent: a clip started before a round restart
+  // settled into its own run's pump, that pump saw it was stale and returned,
+  // and nothing ever started the clips the new run had not got to yet — the
+  // preloader froze partway (6/48) and most of the round silently reverted to
+  // on-demand fetching.
+  //
+  // No staleness guard is needed here. `pump` starts a url only if it is in
+  // `urlsRef.current` (always the live set) and absent from `entries`, so it
+  // cannot start anything the current round does not want, whichever closure
+  // reaches it.
+  const pumpRef = useRef(() => {})
   const [progress, setProgress] = useState(EMPTY)
 
   // Joined rather than the array itself: the RTDB feed hands this component a
@@ -75,7 +88,6 @@ export function useClipPreloader(urls) {
   const key = urls.join('\n')
 
   useEffect(() => {
-    const run = ++runRef.current
     const entries = entriesRef.current
     urlsRef.current = urls
 
@@ -130,7 +142,8 @@ export function useClipPreloader(urls) {
           console.warn(`[display] music_bingo: clip preload failed (${reason})`, url)
         }
         publish()
-        pump()
+        // The LIVE pump, never the one this element was started by — see pumpRef.
+        pumpRef.current()
       }
 
       const onReady = () => settle('ready')
@@ -161,7 +174,6 @@ export function useClipPreloader(urls) {
     }
 
     function pump() {
-      if (run !== runRef.current) return
       const wanted = urlsRef.current
       let inFlight = 0
       wanted.forEach((url) => {
@@ -174,6 +186,9 @@ export function useClipPreloader(urls) {
         inFlight += 1
       }
     }
+    // Reassigned every run, so a clip settling after a restart drains against
+    // the round that is actually on screen.
+    pumpRef.current = pump
 
     if (urls.length > 0) {
       const keep = new Set(urls)
