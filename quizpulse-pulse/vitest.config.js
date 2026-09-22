@@ -10,8 +10,8 @@ export default defineConfig({
       include: ['src/routes/*.{js,jsx}', 'src/hooks/*.js', 'src/ErrorBoundary.jsx'],
       // Scoped regression floors, not a claim of full app/browser coverage.
       thresholds: {
-        statements: 77, lines: 77, branches: 84, functions: 85,
-        'src/routes/Display.jsx': { statements: 72, lines: 72, branches: 83, functions: 80 },
+        statements: 94, lines: 94, branches: 89, functions: 95,
+        'src/routes/Display.jsx': { statements: 92, lines: 92, branches: 88, functions: 96 },
         'src/hooks/*.js': { statements: 100, lines: 100, branches: 90, functions: 93 },
       },
     },

@@ -26,4 +26,10 @@ Coverage includes both route screens, both hooks and ErrorBoundary, including un
 
 No Firebase project, credentials, network media or real audio playback are used. These tests do not exercise deployed RTDB rules, browser autoplay restrictions, HDMI/audio hardware, CSS animations or the full venue workflow. Test those separately before a live release. The refresh button's actual browser reload is not exercised. Phone taps are local feedback, not game entries or score writes; the Host Console owns game outcomes.
 
-Next gaps: full BlitzPulse and Prize Drop phase transitions, legacy mini-game dispatch, team-draw slot reveals, phone countdown/reveal transitions, and browser smoke tests for routing and real autoplay/unlock behaviour.
+## Follow-up hardening pass
+
+76 tests pass. Scoped line coverage increased from 77.78% to 94.80%, branch coverage to 89.54%, and function coverage to 95.08%. Display now has 92.65% line coverage; Play has 100%.
+
+New regressions exercise BlitzPulse phase transitions, Prize Drop resets and timer cancellation, hidden team-draw slots until reveal, legacy mini-game dispatch, media preload failures, phone draw resets and error recovery. Coverage floors now protect these gains.
+
+Remaining gaps include browser smoke tests for routing, real autoplay/unlock behaviour, hardware audio, and deployed rules. Mocked session transitions do not prove server authorization or timing across real clients.

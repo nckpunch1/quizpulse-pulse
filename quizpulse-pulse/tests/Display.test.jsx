@@ -304,3 +304,113 @@ it.each([['pulse', '/SuccessShock.mp3'], ['flatline', '/Flatline.mp3']])('plays 
   feed('shockTheRoom/night', { phase: 'complete', result })
   expect(sting.paused).toBe(true)
 })
+
+it('BlitzPulse advances through team selection, award, next team and completion without carrying old prizes', () => {
+  const base = { type: 'blitz_pulse', startedAt: 1, maxTeams: 2, awardedCount: 0 }
+  game(base)
+  const view = render(<Display />)
+  expect(screen.getByText('NEXT TEAM UP')).toBeTruthy()
+  game({ ...base, phase: 'team_shown', currentTeam: { teamId: 'a', teamName: 'Alpha' } })
+  view.rerender(<Display />)
+  expect(screen.getByText('Alpha')).toBeTruthy()
+  expect(screen.getByText('Answer to win…')).toBeTruthy()
+  expect(screen.getByText('Team 1 of 2')).toBeTruthy()
+  game({ ...base, phase: 'prize_awarded', awardedCount: 1, currentTeam: { teamId: 'a', teamName: 'Alpha' }, currentPrize: { prizeName: 'Voucher' } })
+  view.rerender(<Display />)
+  act(() => vi.advanceTimersByTime(4200))
+  expect(screen.getByText('Voucher')).toBeTruthy()
+  expect(vi.getTimerCount()).toBe(0)
+  game({ ...base, phase: 'team_shown', awardedCount: 1, currentTeam: { teamId: 'b', teamName: 'Beta' } })
+  view.rerender(<Display />)
+  expect(screen.queryByText('Voucher')).toBeNull()
+  expect(screen.queryByText('Alpha')).toBeNull()
+  expect(screen.getByText('Team 2 of 2')).toBeTruthy()
+  game({ ...base, phase: 'complete', awardedCount: 2 })
+  view.rerender(<Display />)
+  expect(screen.getByText("THAT'S A WRAP")).toBeTruthy()
+  expect(screen.getByText('Team 2 of 2')).toBeTruthy()
+})
+
+it('cancels an unfinished BlitzPulse prize animation when the host clears the game', () => {
+  game({ type: 'blitz_pulse', phase: 'prize_awarded', currentTeam: { teamId: 'a', teamName: 'Alpha' }, currentPrize: { prizeName: 'Voucher' } })
+  const view = render(<Display />)
+  expect(vi.getTimerCount()).toBe(2)
+  game(null)
+  view.rerender(<Display />)
+  expect(vi.getTimerCount()).toBe(0)
+  act(() => vi.advanceTimersByTime(5000))
+  expect(screen.queryByText('Voucher')).toBeNull()
+})
+
+it('restarts Prize Drop animation for a new drop identity even when the phase stays dropping', () => {
+  const base = { type: 'prize_drop', phase: 'dropping', prizes: ['Mug', 'Voucher'], dropStartedAt: 1, prizeName: 'Voucher' }
+  game(base)
+  const view = render(<Display />)
+  expect(screen.getByText('SELECTING PRIZE...')).toBeTruthy()
+  act(() => vi.advanceTimersByTime(4200))
+  expect(screen.getByText('Voucher')).toBeTruthy()
+  expect(screen.queryByText('SELECTING PRIZE...')).toBeNull()
+  game({ ...base, dropStartedAt: 2, prizeName: 'Mug' })
+  view.rerender(<Display />)
+  expect(screen.getByText('SELECTING PRIZE...')).toBeTruthy()
+  act(() => vi.advanceTimersByTime(4200))
+  expect(screen.getByText('Mug')).toBeTruthy()
+  expect(screen.queryByText('Voucher')).toBeNull()
+})
+
+it('resetting Prize Drop cancels its outstanding reveal timers', () => {
+  game({ type: 'prize_drop', phase: 'dropping', prizes: [], prizeName: 'Voucher' })
+  const view = render(<Display />)
+  expect(vi.getTimerCount()).toBe(2)
+  game({ type: 'prize_drop', phase: 'idle', prizes: [] })
+  view.rerender(<Display />)
+  expect(vi.getTimerCount()).toBe(0)
+  expect(screen.queryByText('SELECTING PRIZE...')).toBeNull()
+})
+
+it.each([null, 100000])('team draw reveals only host-approved slots with timer=%s', timerStartedAt => {
+  const base = { type: 'team_draw', teams: [{ teamId: 'a', teamName: 'Alpha' }, { teamId: 'b', teamName: 'Beta' }], timerStartedAt, revealedCount: 0 }
+  game(base)
+  const view = render(<Display />)
+  expect(screen.queryByText('Alpha')).toBeNull()
+  expect(screen.queryByText('Beta')).toBeNull()
+  game({ ...base, revealedCount: 1 })
+  view.rerender(<Display />)
+  expect(screen.getByText('Alpha')).toBeTruthy()
+  expect(screen.queryByText('Beta')).toBeNull()
+  game({ ...base, revealedCount: 2 })
+  view.rerender(<Display />)
+  expect(screen.getByText('Beta')).toBeTruthy()
+})
+
+it.each([
+  { questions: [{ text: 'First?', choiceA: 'Red', choiceB: 'Blue' }, { question: 'Second?', choices: ['Green', 'Gold'] }], currentQuestionIndex: 1 },
+  { questionText: 'Second?', choiceA: 'Green', choiceB: 'Gold' },
+])('legacy Blitz renders the selected question and both choices: %j', miniGame => {
+  fixture.data.state = 'game_active'
+  fixture.data.session = { outcomeType: 'blitz', miniGame }
+  render(<Display />)
+  expect(screen.getByRole('heading', { name: 'Second?' })).toBeTruthy()
+  expect(screen.getByText('Green')).toBeTruthy()
+  expect(screen.getByText('Gold')).toBeTruthy()
+  expect(screen.queryByText('First?')).toBeNull()
+})
+
+it.each(['closest_answer', 'beer_game', 'bonus'])('legacy %s reads its question without requiring currentGame', outcomeType => {
+  fixture.data.state = 'game_active'
+  fixture.data.winnerName = 'Alpha'
+  fixture.data.session = { outcomeType, miniGame: { questionText: 'Legacy question?' } }
+  render(<Display />)
+  expect(screen.getByRole('heading', { name: 'Legacy question?' })).toBeTruthy()
+})
+
+it('shows preload failures without blocking the music board and hides settled status once calls start', () => {
+  game(bingo())
+  const view = render(<Display />)
+  expect(screen.getByText('Loading clips 0/1')).toBeTruthy()
+  act(() => clipFor(song.clipUrl).dispatchEvent(new Event('error')))
+  expect(screen.getByText('♪ 0/1 ready · 1 unavailable')).toBeTruthy()
+  call(view, 10)
+  expect(screen.queryByText('♪ 0/1 ready · 1 unavailable')).toBeNull()
+  expect(screen.getByText('1 called')).toBeTruthy()
+})
