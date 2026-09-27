@@ -1,0 +1,8 @@
+# Never upload local env files (they may hold another environment's config or
+# tokens): deployments get their configuration from Vercel's own variables.
+.env
+.env.*
+*.local
+.vercel
+coverage
+node_modules
