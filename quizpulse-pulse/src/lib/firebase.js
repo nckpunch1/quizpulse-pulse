@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app'
 import { getDatabase } from 'firebase/database'
+import { assertFirebaseEnvironment, deployEnvironment } from './firebaseEnvGuard'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -10,6 +11,10 @@ const firebaseConfig = {
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
+
+// A non-production build configured with production resources refuses to start
+// (admin-host docs/environment-separation.md); production is unaffected.
+assertFirebaseEnvironment({ firebase: firebaseConfig }, deployEnvironment())
 
 const app = initializeApp(firebaseConfig)
 export const db = getDatabase(app)

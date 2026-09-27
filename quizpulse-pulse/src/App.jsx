@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, useParams } from 'react-router-dom'
+import { usesProductionProject } from '@/lib/firebaseEnvGuard'
 import Play from './routes/Play'
 import Display from './routes/Display'
 
@@ -24,15 +25,18 @@ function Home() {
 }
 
 // The canonical leaderboard display lives in admin-host; this repo's copy
-// drifted badly and was deleted. Old bookmarks on this domain get forwarded.
+// drifted badly and was deleted. Old bookmarks on this domain get forwarded to
+// THIS environment's admin app (VITE_ADMIN_APP_URL); only a production build
+// falls back to the production admin, so a Dev screen never lands there.
+const adminAppUrl = (import.meta.env.VITE_ADMIN_APP_URL || (usesProductionProject() ? 'https://admin.pulseiq.com.au' : '')).replace(/\/$/, '')
 const LeaderboardRedirect = () => {
   const { id } = useParams()
   useEffect(() => {
-    window.location.replace(`https://admin.pulseiq.com.au/leaderboard/${id}`)
+    if (adminAppUrl) window.location.replace(`${adminAppUrl}/leaderboard/${id}`)
   }, [id])
   return (
     <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', color: '#fff', background: '#0b0e14' }}>
-      Redirecting to leaderboard…
+      {adminAppUrl ? 'Redirecting to leaderboard…' : 'No admin app is configured for this environment (VITE_ADMIN_APP_URL).'}
     </div>
   )
 }
