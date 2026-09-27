@@ -1,0 +1,12 @@
+# Vercel uploads from the repo root (the project's Root Directory is
+# quizpulse-pulse). Never upload local env files, which may hold another
+# environment's config or tokens: deployments take their configuration from
+# each Vercel environment's variables. Patterns apply at any depth.
+.env
+.env.*
+*.local
+.vercel
+.claude
+.DS_Store
+node_modules
+coverage
